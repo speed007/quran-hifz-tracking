@@ -6,25 +6,46 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_current_user, get_db, require_admin
-from ..quran_meta import page_range_meta
+from ..quran_meta import page_range_meta, page_of_ayah, page_to_surah_number, rukus_in_juz, ruku_page_range
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 def validate_session_pages(db: Session, payload: schemas.SessionCreate) -> None:
-    surah = db.get(models.Surah, payload.surah_id)
-    if surah is None:
-        raise HTTPException(status_code=400, detail="Unknown surah")
-    if payload.from_page < surah.start_page or payload.to_page > surah.end_page:
+    if payload.from_page < 1 or payload.to_page > 604:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Pages must be within {surah.name_en} "
-                f"(pages {surah.start_page}-{surah.end_page})"
-            ),
+            detail="Pages must be between 1 and 604",
         )
     if payload.from_page > payload.to_page:
         raise HTTPException(status_code=400, detail="from_page must be <= to_page")
+
+
+@router.get("/rukus-in-juz")
+def rukus_in_juz_endpoint(
+    juz: int = Query(ge=1, le=30),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    first, last = rukus_in_juz(juz)
+    return {"first_ruku": first, "last_ruku": last, "rukus": list(range(first, last + 1))}
+
+
+@router.get("/ruku-pages")
+def ruku_pages_endpoint(
+    ruku: int = Query(ge=1, le=556),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    from_page, to_page = ruku_page_range(ruku)
+    surah_number = page_to_surah_number(from_page)
+    surah = db.query(models.Surah).filter(models.Surah.number == surah_number).first()
+    return {
+        "from_page": from_page,
+        "to_page": to_page,
+        "surah_number": surah_number,
+        "surah_name_en": surah.name_en if surah else None,
+    }
 
 
 @router.get("/section-meta", response_model=schemas.SectionMetaOut)
@@ -43,7 +64,7 @@ def section_meta(
     if from_page > to_page:
         raise HTTPException(status_code=400, detail="from_page must be <= to_page")
     jz_from, jz_to, rk_from, rk_to = page_range_meta(
-        surah.number, from_page, to_page
+        from_page, to_page
     )
     return schemas.SectionMetaOut(
         juz_from=jz_from, juz_to=jz_to, ruku_from=rk_from, ruku_to=rk_to
@@ -80,7 +101,7 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
         item.logged_by_name = logged_by.name if logged_by else None
         if surah is not None:
             jz_from, jz_to, rk_from, rk_to = page_range_meta(
-                surah.number, row.from_page, row.to_page
+                row.from_page, row.to_page
             )
             item.juz_from, item.juz_to = jz_from, jz_to
             item.ruku_from, item.ruku_to = rk_from, rk_to
@@ -97,10 +118,16 @@ def create_session(
     if db.get(models.Student, payload.student_id) is None:
         raise HTTPException(status_code=400, detail="Unknown student")
     validate_session_pages(db, payload)
+    surah_number = page_to_surah_number(payload.from_page)
+    surah = (
+        db.query(models.Surah).filter(models.Surah.number == surah_number).first()
+    )
+    if surah is None:
+        raise HTTPException(status_code=500, detail="Surah not found")
     row = models.Session(
         student_id=payload.student_id,
         kind=payload.kind,
-        surah_id=payload.surah_id,
+        surah_id=surah.id,
         from_page=payload.from_page,
         to_page=payload.to_page,
         date=payload.date or date.today(),

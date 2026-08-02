@@ -2,6 +2,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..quran_meta import page_range_meta
 
 
 def compute_progress(db: Session, student_id: int) -> schemas.ProgressOut:
@@ -15,13 +16,19 @@ def compute_progress(db: Session, student_id: int) -> schemas.ProgressOut:
         .all()
     )
     pages: set[int] = set()
+    rukus: set[int] = set()
     for row in new_rows:
         pages.update(range(row.from_page, row.to_page + 1))
+        jz_from, jz_to, rk_from, rk_to = page_range_meta(
+            row.from_page, row.to_page
+        )
+        rukus.update(range(rk_from, rk_to + 1))
 
     total = schemas.ProgressOut(
         total_pages=604,
         memorised_pages=len(pages),
         percent=round(len(pages) / 604 * 100, 1) if pages else 0.0,
+        rukus_memorised=len(rukus),
     )
 
     latest = (

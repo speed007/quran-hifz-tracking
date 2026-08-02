@@ -68,7 +68,6 @@ class StudentOut(BaseModel):
 class SessionCreate(BaseModel):
     student_id: int
     kind: SessionKind = "new"
-    surah_id: int
     from_page: int
     to_page: int
     date: date_type | None = None
@@ -133,6 +132,8 @@ class ProgressOut(BaseModel):
     total_pages: int = 604
     memorised_pages: int
     percent: float
+    rukus_memorised: int = 0
+    total_rukus: int = 556
     current_surah: SurahOut | None = None
     current_page: int | None = None
 

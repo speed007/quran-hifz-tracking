@@ -1,41 +1,89 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, SectionMeta, SessionDetail, Student, Surah, User } from "../api";
+import { api, SessionDetail, Student, User } from "../api";
 
 export default function LogSession({ user }: { user: User }) {
   const [students, setStudents] = useState<Student[]>([]);
-  const [surahs, setSurahs] = useState<Surah[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [created, setCreated] = useState<SessionDetail | null>(null);
 
   const [studentId, setStudentId] = useState("");
   const [kind, setKind] = useState<"new" | "revision">("new");
-  const [surahId, setSurahId] = useState("");
+  const [juz, setJuz] = useState("");
+  const [rukuFrom, setRukuFrom] = useState("");
+  const [rukuTo, setRukuTo] = useState("");
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
-  const [sectionMeta, setSectionMeta] = useState<SectionMeta | null>(null);
+  const [surahRef, setSurahRef] = useState<string | null>(null);
+  const [rukuList, setRukuList] = useState<number[]>([]);
 
   useEffect(() => {
     api.students().then(setStudents).catch(() => {});
-    api.surahs().then(setSurahs).catch(() => {});
   }, []);
 
-  const selectedSurah = surahs.find((s) => s.id === Number(surahId));
+  useEffect(() => {
+    if (!juz) {
+      setRukuList([]);
+      setRukuFrom("");
+      setRukuTo("");
+      setFromPage("");
+      setToPage("");
+      setSurahRef(null);
+      return;
+    }
+    api
+      .rukusInJuz(Number(juz))
+      .then((data) => {
+        setRukuList(data.rukus);
+        if (data.rukus.length > 0) {
+          setRukuFrom(String(data.rukus[0]));
+          setRukuTo(String(data.rukus[data.rukus.length - 1]));
+        } else {
+          setRukuFrom("");
+          setRukuTo("");
+        }
+      })
+      .catch(() => setRukuList([]));
+  }, [juz]);
 
   useEffect(() => {
-    const sid = Number(surahId);
-    const f = Number(fromPage);
-    const t = Number(toPage) || f;
-    setSectionMeta(null);
-    if (!selectedSurah || !sid || !f) return;
-    if (f < selectedSurah.start_page || t > selectedSurah.end_page) return;
-    api
-      .sectionMeta(sid, f, t)
-      .then(setSectionMeta)
-      .catch(() => setSectionMeta(null));
-  }, [surahId, fromPage, toPage, selectedSurah]);
+    if (!rukuFrom || !rukuTo) {
+      setFromPage("");
+      setToPage("");
+      setSurahRef(null);
+      return;
+    }
+    const from = Number(rukuFrom);
+    const to = Number(rukuTo);
+    if (from > to) {
+      setFromPage("");
+      setToPage("");
+      setSurahRef(null);
+      return;
+    }
+    const promises = [];
+    for (let r = from; r <= to; r++) {
+      promises.push(api.rukuPages(r));
+    }
+    Promise.all(promises)
+      .then((results) => {
+        const allFrom = results.map((r) => r.from_page);
+        const allTo = results.map((r) => r.to_page);
+        setFromPage(String(Math.min(...allFrom)));
+        setToPage(String(Math.max(...allTo)));
+        const names = new Set(
+          results.map((r) => r.surah_name_en).filter(Boolean)
+        );
+        setSurahRef([...names].join(", ") || null);
+      })
+      .catch(() => {
+        setFromPage("");
+        setToPage("");
+        setSurahRef(null);
+      });
+  }, [rukuFrom, rukuTo]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -46,7 +94,6 @@ export default function LogSession({ user }: { user: User }) {
       const saved = await api.createSession({
         student_id: Number(studentId),
         kind,
-        surah_id: Number(surahId),
         from_page: Number(fromPage),
         to_page: Number(toPage) || Number(fromPage),
         date: date || undefined,
@@ -54,6 +101,9 @@ export default function LogSession({ user }: { user: User }) {
       });
       setMessage("Session logged.");
       setCreated(saved);
+      setJuz("");
+      setRukuFrom("");
+      setRukuTo("");
       setFromPage("");
       setToPage("");
       setNote("");
@@ -72,7 +122,11 @@ export default function LogSession({ user }: { user: User }) {
       <form className="card form" onSubmit={submit}>
         <label>
           Student
-          <select value={studentId} onChange={(e) => setStudentId(e.target.value)} required>
+          <select
+            value={studentId}
+            onChange={(e) => setStudentId(e.target.value)}
+            required
+          >
             <option value="">Choose…</option>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -83,29 +137,64 @@ export default function LogSession({ user }: { user: User }) {
         </label>
         <label>
           Type
-          <select value={kind} onChange={(e) => setKind(e.target.value as "new" | "revision")}>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as "new" | "revision")}
+          >
             <option value="new">Memorised (new)</option>
             <option value="revision">Revision</option>
           </select>
         </label>
         <label>
-          Surah
-          <select value={surahId} onChange={(e) => setSurahId(e.target.value)} required>
+          Juz
+          <select value={juz} onChange={(e) => setJuz(e.target.value)} required>
             <option value="">Choose…</option>
-            {surahs.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.number}. {s.name_en} ({s.name_ar}) · pages {s.start_page}–{s.end_page}
+            {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                Juz {n}
               </option>
             ))}
           </select>
         </label>
         <div className="row">
           <label>
+            Ruku from
+            <select
+              value={rukuFrom}
+              onChange={(e) => setRukuFrom(e.target.value)}
+              required
+            >
+              <option value="">—</option>
+              {rukuList.map((r) => (
+                <option key={r} value={r}>
+                  Ruku {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Ruku to
+            <select
+              value={rukuTo}
+              onChange={(e) => setRukuTo(e.target.value)}
+              required
+            >
+              <option value="">—</option>
+              {rukuList.map((r) => (
+                <option key={r} value={r}>
+                  Ruku {r}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="row">
+          <label>
             From page
             <input
               type="number"
-              min={selectedSurah?.start_page}
-              max={selectedSurah?.end_page}
+              min={1}
+              max={604}
               value={fromPage}
               onChange={(e) => setFromPage(e.target.value)}
               required
@@ -115,21 +204,22 @@ export default function LogSession({ user }: { user: User }) {
             To page
             <input
               type="number"
-              min={selectedSurah?.start_page}
-              max={selectedSurah?.end_page}
+              min={1}
+              max={604}
               value={toPage}
               onChange={(e) => setToPage(e.target.value)}
             />
           </label>
         </div>
-        {sectionMeta && (
+        {surahRef && (
+          <p className="muted">Surah: {surahRef}</p>
+        )}
+        {rukuFrom && rukuTo && (
           <p className="success">
-            Juz {sectionMeta.juz_from === sectionMeta.juz_to
-              ? sectionMeta.juz_from
-              : `${sectionMeta.juz_from}–${sectionMeta.juz_to}`}{" "}
-            · Ruku {sectionMeta.ruku_from === sectionMeta.ruku_to
-              ? sectionMeta.ruku_from
-              : `${sectionMeta.ruku_from}–${sectionMeta.ruku_to}`}
+            Ruku {rukuFrom === rukuTo ? rukuFrom : `${rukuFrom}–${rukuTo}`}
+            {fromPage && toPage
+              ? ` · pages ${fromPage}–${toPage}`
+              : ""}
           </p>
         )}
         <label>

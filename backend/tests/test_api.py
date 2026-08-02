@@ -123,13 +123,16 @@ def test_sessions_and_stats_progress(client):
     assert body["total_sessions"] == 2
 
 
-def test_invalid_page_range_returns_400(client):
+def test_pages_outside_valid_range_returns_400(client):
     login_admin(client)
 
     student = create_student(client, "Zaynab").json()
     yasin = surah_id_by_number(client, 36)
 
-    resp = create_session(client, student["id"], "new", yasin, 100, 102)
+    resp = create_session(client, student["id"], "new", yasin, 0, 102)
+    assert resp.status_code == 400
+
+    resp = create_session(client, student["id"], "new", yasin, 100, 605)
     assert resp.status_code == 400
 
 

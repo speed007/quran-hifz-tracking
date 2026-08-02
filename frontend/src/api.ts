@@ -27,6 +27,8 @@ export interface Progress {
   total_pages: number;
   memorised_pages: number;
   percent: number;
+  rukus_memorised: number;
+  total_rukus: number;
   current_surah: Surah | null;
   current_page: number | null;
 }
@@ -126,10 +128,20 @@ export const api = {
     request<SectionMeta>(
       `/api/sessions/section-meta?surah_id=${surahId}&from_page=${fromPage}&to_page=${toPage}`
     ),
+  rukusInJuz: (juz: number) =>
+    request<{ first_ruku: number; last_ruku: number; rukus: number[] }>(
+      `/api/sessions/rukus-in-juz?juz=${juz}`
+    ),
+  rukuPages: (ruku: number) =>
+    request<{
+      from_page: number;
+      to_page: number;
+      surah_number: number;
+      surah_name_en: string | null;
+    }>(`/api/sessions/ruku-pages?ruku=${ruku}`),
   createSession: (body: {
     student_id: number;
     kind: "new" | "revision";
-    surah_id: number;
     from_page: number;
     to_page: number;
     date?: string;

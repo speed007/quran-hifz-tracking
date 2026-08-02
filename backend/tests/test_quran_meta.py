@@ -67,6 +67,6 @@ def test_page_first_ayah_spot_checks():
 
 
 def test_page_range_meta_covers_single_and_multi_ruku():
-    assert page_range_meta(36, 440, 442) == (22, 23, 381, 383)
-    assert page_range_meta(36, 440, 441) == (22, 23, 381, 382)
-    assert page_range_meta(1, 1, 1) == (1, 1, 1, 1)
+    assert page_range_meta(440, 442) == (22, 23, 381, 383)
+    assert page_range_meta(440, 441) == (22, 23, 381, 382)
+    assert page_range_meta(1, 1) == (1, 1, 1, 1)

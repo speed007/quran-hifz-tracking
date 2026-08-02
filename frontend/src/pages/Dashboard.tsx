@@ -49,7 +49,8 @@ export default function Dashboard({ user }: { user: User }) {
               </div>
               <p>
                 {p?.memorised_pages ?? 0} of {p?.total_pages} pages (
-                {p?.percent ?? 0}%)
+                {p?.percent ?? 0}%) · {p?.rukus_memorised ?? 0} of {p?.total_rukus}{" "}
+                rukus
               </p>
               {p?.current_surah && (
                 <p className="muted">

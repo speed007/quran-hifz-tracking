@@ -208,16 +208,54 @@ def _last_ayah_of_page(page: int) -> int:
 
 @lru_cache(maxsize=4096)
 def page_range_meta(
-    surah_number: int, from_page: int, to_page: int
+    from_page: int, to_page: int
 ) -> tuple[int, int, int, int]:
-    """Return (juz_from, juz_to, ruku_from, ruku_to) for a session's pages.
-
-    Pages are app-level page numbers within the given surah (already validated
-    to fall inside the surah's page span). The returned numbers are global
-    (juz 1..30, ruku 1..556).
-    """
+    """Return (juz_from, juz_to, ruku_from, ruku_to) for a page range."""
     first_ayah = _PAGE_FIRST[from_page]
     last_ayah = _last_ayah_of_page(to_page)
     jz = section_range(JUZ, first_ayah, last_ayah)
     rk = section_range(RUKU, first_ayah, last_ayah)
     return jz[0], jz[1], rk[0], rk[1]
+
+
+def page_of_ayah(ayah: int) -> int:
+    """Return the 1-based mushaf page number for a global ayah id."""
+    return bisect.bisect_right(_PAGE_FIRST, ayah, 1) - 1
+
+
+def page_to_surah_number(page: int) -> int:
+    """Return the surah number (1..114) for a mushaf page."""
+    ayah = _PAGE_FIRST[page]
+    idx = bisect.bisect_right(SURAH_START_AYAH, ayah) - 1
+    return max(1, idx)
+
+
+@lru_cache(maxsize=1)
+def _surah_number_by_page() -> list[int]:
+    result = [0] * (TOTAL_PAGES + 1)
+    for i, (number, _ar, _en, start_page) in enumerate(SURAHS):
+        end_page = (
+            SURAHS[i + 1][3] - 1 if i + 1 < len(SURAHS) else TOTAL_PAGES
+        )
+        for p in range(start_page, end_page + 1):
+            result[p] = number
+    return result
+
+
+SURAH_NUMBER_BY_PAGE = _surah_number_by_page()
+
+
+def rukus_in_juz(juz_num: int) -> tuple[int, int]:
+    """Return (first_ruku, last_ruku) global ruku numbers for a juz (1..30)."""
+    first_ayah = JUZ[juz_num]
+    last_ayah = JUZ[juz_num + 1] - 1 if juz_num < TOTAL_JUZS else TOTAL_AYAHS
+    first_ruku = bisect.bisect_left(RUKU, first_ayah, 1)
+    last_ruku = bisect.bisect_right(RUKU, last_ayah, 1) - 1
+    return first_ruku, last_ruku
+
+
+def ruku_page_range(ruku_num: int) -> tuple[int, int]:
+    """Return (from_page, to_page) for a global ruku number (1..556)."""
+    first_ayah = RUKU[ruku_num]
+    last_ayah = RUKU[ruku_num + 1] - 1 if ruku_num < TOTAL_RUKUS else TOTAL_AYAHS
+    return page_of_ayah(first_ayah), page_of_ayah(last_ayah)
