@@ -27,9 +27,14 @@ export default function App() {
     navigate("/login");
   }
 
+  function handleLogin(user: User) {
+    setUser(user);
+    navigate("/");
+  }
+
   if (loading) return <div className="center">Loading…</div>;
 
-  if (!user) return <Login onLogin={setUser} />;
+  if (!user) return <Login onLogin={handleLogin} />;
 
   return (
     <div className="app">
