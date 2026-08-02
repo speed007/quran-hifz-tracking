@@ -26,11 +26,41 @@ cfg = get_settings()
 FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 
+def migrate_db(db: SessionLocal) -> None:
+    """Add missing columns to existing tables without dropping data."""
+    conn = db.connection()
+    cursor = conn.connection.cursor()
+
+    # users table: add student_id if missing
+    cursor.execute("PRAGMA table_info(users)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "student_id" not in columns:
+        cursor.execute(
+            "ALTER TABLE users ADD COLUMN student_id INTEGER REFERENCES students(id)"
+        )
+        conn.commit()
+
+    # sessions table: add deadline and assigned_by_id if missing
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "deadline" not in columns:
+        cursor.execute(
+            "ALTER TABLE sessions ADD COLUMN deadline DATE"
+        )
+        conn.commit()
+    if "assigned_by_id" not in columns:
+        cursor.execute(
+            "ALTER TABLE sessions ADD COLUMN assigned_by_id INTEGER REFERENCES users(id)"
+        )
+        conn.commit()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        migrate_db(db)
         seed_database(db)
     finally:
         db.close()
