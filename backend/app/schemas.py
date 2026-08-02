@@ -5,7 +5,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SessionKind = Literal["new", "revision"]
-Role = Literal["admin", "user"]
+Role = Literal["creator", "admin", "user"]
+CreatableRole = Literal["admin", "user"]
 
 
 class SurahOut(BaseModel):
@@ -39,13 +40,13 @@ class UserCreate(BaseModel):
     name: str
     username: str
     password: str = Field(min_length=6)
-    role: Role = "user"
+    role: CreatableRole = "user"
 
 
 class UserUpdate(BaseModel):
     name: str | None = None
     password: str | None = Field(default=None, min_length=6)
-    role: Role | None = None
+    role: CreatableRole | None = None
     is_active: bool | None = None
 
 

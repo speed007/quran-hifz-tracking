@@ -4,7 +4,7 @@ export interface User {
   id: number;
   name: string;
   username: string;
-  role: "admin" | "user";
+  role: "creator" | "admin" | "user";
   telegram_id: number | null;
   is_active: boolean;
 }
@@ -101,6 +101,7 @@ export const api = {
     request<User>("/api/users", { method: "POST", body: JSON.stringify(body) }),
   updateUser: (id: number, body: Partial<{ name: string; password: string; role: string; is_active: boolean }>) =>
     request<User>(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteUser: (id: number) => request<void>(`/api/users/${id}`, { method: "DELETE" }),
 
   students: () => request<Student[]>("/api/students"),
   createStudent: (name: string) =>

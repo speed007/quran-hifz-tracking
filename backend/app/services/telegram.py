@@ -67,7 +67,7 @@ class TelegramBot:
 
     @staticmethod
     def _is_admin(user: models.User) -> bool:
-        return user.role == "admin"
+        return user.role in ("admin", "creator")
 
     def _send_daily_summary(self, now: datetime) -> None:
         if not self.enabled or self._app is None:
@@ -77,7 +77,7 @@ class TelegramBot:
             admins = (
                 db.query(models.User)
                 .filter(
-                    models.User.role == "admin",
+                    models.User.role.in_(("admin", "creator")),
                     models.User.telegram_id.isnot(None),
                     models.User.is_active.is_(True),
                 )

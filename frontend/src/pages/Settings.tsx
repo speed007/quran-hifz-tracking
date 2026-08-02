@@ -10,7 +10,7 @@ export default function SettingsPage({ user }: { user: User }) {
     api.settings().then(setSettings).catch((e) => setError((e as Error).message));
   }, []);
 
-  if (user.role !== "admin") {
+  if (user.role === "user") {
     return <div className="card">Only admins can change settings.</div>;
   }
   if (error) return <div className="card error">{error}</div>;

@@ -45,7 +45,7 @@ export default function LogSession({ user }: { user: User }) {
     }
   }
 
-  if (user.role !== "admin") {
+  if (user.role === "user") {
     return <div className="card">Only admins can log sessions.</div>;
   }
 

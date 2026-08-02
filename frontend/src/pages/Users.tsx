@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { api, User } from "../api";
 
-export default function Users() {
+export default function Users({ user }: { user: User }) {
   const [users, setUsers] = useState<User[]>([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -11,6 +11,8 @@ export default function Users() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+
+  const isCreator = user.role === "creator";
 
   useEffect(() => {
     api.users().then(setUsers).catch((e) => setError((e as Error).message));
@@ -33,13 +35,55 @@ export default function Users() {
     }
   }
 
-  async function toggleActive(user: User) {
+  async function toggleActive(target: User) {
+    setError("");
     try {
-      await api.updateUser(user.id, { is_active: !user.is_active });
+      await api.updateUser(target.id, { is_active: !target.is_active });
       setReload((n) => n + 1);
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  async function resetPassword(target: User) {
+    const value = window.prompt(`New password for ${target.username} (min 6 characters):`);
+    if (!value) return;
+    setError("");
+    try {
+      await api.updateUser(target.id, { password: value });
+      setMessage(`Password reset for ${target.username}.`);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function remove(target: User) {
+    if (!window.confirm(`Delete user "${target.username}"? This cannot be undone.`)) return;
+    setError("");
+    try {
+      await api.deleteUser(target.id);
+      setMessage(`User ${target.username} deleted.`);
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function canManage(target: User) {
+    if (target.role === "creator") return false;
+    if (target.id === user.id) return false;
+    if (isCreator) return true;
+    return target.role === "user";
+  }
+
+  function canDelete(target: User) {
+    return canManage(target) && isCreator;
+  }
+
+  function roleLabel(role: string) {
+    if (role === "creator") return "Creator";
+    if (role === "admin") return "Admin";
+    return "User (read-only)";
   }
 
   async function makeLinkCode() {
@@ -82,7 +126,7 @@ export default function Users() {
           Role
           <select value={role} onChange={(e) => setRole(e.target.value as "user" | "admin")}>
             <option value="user">User (read-only)</option>
-            <option value="admin">Admin (full access)</option>
+            {isCreator && <option value="admin">Admin</option>}
           </select>
         </label>
         <button type="submit">Create user</button>
@@ -97,7 +141,7 @@ export default function Users() {
             <th>Role</th>
             <th>Telegram linked</th>
             <th>Active</th>
-            <th></th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -105,13 +149,27 @@ export default function Users() {
             <tr key={u.id}>
               <td>{u.name}</td>
               <td>{u.username}</td>
-              <td>{u.role}</td>
+              <td>{roleLabel(u.role)}</td>
               <td>{u.telegram_id ? "Yes" : "No"}</td>
               <td>{u.is_active ? "Yes" : "No"}</td>
               <td>
-                <button className="danger" onClick={() => toggleActive(u)}>
-                  {u.is_active ? "Disable" : "Enable"}
-                </button>
+                {u.id === user.id ? (
+                  <span className="muted">You</span>
+                ) : canManage(u) ? (
+                  <>
+                    {canDelete(u) && (
+                      <button className="danger" onClick={() => remove(u)}>
+                        Delete
+                      </button>
+                    )}
+                    <button onClick={() => toggleActive(u)}>
+                      {u.is_active ? "Disable" : "Enable"}
+                    </button>
+                    <button onClick={() => resetPassword(u)}>Reset password</button>
+                  </>
+                ) : (
+                  <span className="muted">Protected</span>
+                )}
               </td>
             </tr>
           ))}

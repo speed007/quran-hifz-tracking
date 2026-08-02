@@ -12,7 +12,7 @@ export default function Students({ user }: { user: User }) {
     api.stats().then(setStats).catch((e) => setError((e as Error).message));
   }, [reload]);
 
-  const isAdmin = user.role === "admin";
+  const isAdmin = user.role !== "user";
 
   async function add(e: FormEvent) {
     e.preventDefault();

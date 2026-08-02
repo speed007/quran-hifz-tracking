@@ -39,7 +39,7 @@ export default function App() {
         <NavLink to="/log">Log session</NavLink>
         <NavLink to="/students">Students</NavLink>
         <NavLink to="/settings">Settings</NavLink>
-        {user.role === "admin" && <NavLink to="/users">Users</NavLink>}
+        {user.role !== "user" && <NavLink to="/users">Users</NavLink>}
         <button className="link-button" onClick={handleLogout}>
           Log out
         </button>
@@ -50,7 +50,7 @@ export default function App() {
           <Route path="/log" element={<LogSession user={user} />} />
           <Route path="/students" element={<Students user={user} />} />
           <Route path="/settings" element={<SettingsPage user={user} />} />
-          {user.role === "admin" && <Route path="/users" element={<Users />} />}
+          {user.role !== "user" && <Route path="/users" element={<Users user={user} />} />}
         </Routes>
       </main>
     </div>

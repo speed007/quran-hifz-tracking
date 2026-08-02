@@ -41,6 +41,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
+    if user.role not in ("admin", "creator"):
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_creator(user: User = Depends(get_current_user)) -> User:
+    if user.role != "creator":
+        raise HTTPException(status_code=403, detail="Creator access required")
     return user

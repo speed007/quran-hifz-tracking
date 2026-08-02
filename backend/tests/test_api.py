@@ -45,14 +45,14 @@ def test_health_returns_ok(client):
 def test_login_default_admin_sets_cookie_and_me(client):
     resp = login_admin(client)
     assert resp.json()["username"] == "admin"
-    assert resp.json()["role"] == "admin"
+    assert resp.json()["role"] == "creator"
     assert client.cookies.get("hifz_session")
 
     me = client.get("/api/auth/me")
     assert me.status_code == 200
     body = me.json()
     assert body["username"] == "admin"
-    assert body["role"] == "admin"
+    assert body["role"] == "creator"
 
 
 def test_login_wrong_password_returns_401(client):
@@ -202,3 +202,209 @@ def test_delete_student_removes_it(client):
 
     students = client.get("/api/students").json()
     assert all(s["id"] != student["id"] for s in students)
+
+
+# ---- user management hardening ------------------------------------------
+
+
+def make_users(client):
+    """Create one admin and one user from the creator session. Returns their ids."""
+    admin = client.post(
+        "/api/users",
+        json={"name": "Second Admin", "username": "admin2", "password": "admin2x", "role": "admin"},
+    )
+    assert admin.status_code == 201, admin.text
+    user = client.post(
+        "/api/users",
+        json={"name": "Plain User", "username": "plain1", "password": "plain12", "role": "user"},
+    )
+    assert user.status_code == 201, user.text
+    return admin.json(), user.json()
+
+
+def test_creator_can_delete_admin_and_user(client):
+    login_admin(client)
+    admin, user = make_users(client)
+
+    resp = client.delete(f"/api/users/{admin['id']}")
+    assert resp.status_code == 204
+
+    resp = client.delete(f"/api/users/{user['id']}")
+    assert resp.status_code == 204
+
+    users = {u["username"] for u in client.get("/api/users").json()}
+    assert users == {"admin"}
+
+
+def test_creator_cannot_delete_self(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+
+    resp = client.delete(f"/api/users/{me['id']}")
+    assert resp.status_code == 403
+
+    me2 = client.get("/api/auth/me").json()
+    assert me2["role"] == "creator"
+
+
+def test_creator_cannot_disable_self(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+
+    resp = client.patch(f"/api/users/{me['id']}", json={"is_active": False})
+    assert resp.status_code == 403
+
+
+def test_creator_can_change_roles(client):
+    login_admin(client)
+    _, user = make_users(client)
+
+    resp = client.patch(f"/api/users/{user['id']}", json={"role": "admin"})
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "admin"
+
+    resp = client.patch(f"/api/users/{user['id']}", json={"role": "user"})
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "user"
+
+
+def test_admin_cannot_promote_user_to_admin(client):
+    login_admin(client)
+    _, user = make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{user['id']}", json={"role": "admin"})
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_create_admin(client):
+    login_admin(client)
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.post(
+        "/api/users",
+        json={"name": "Wannabe", "username": "admin3", "password": "admin3x", "role": "admin"},
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_delete_another_admin(client):
+    login_admin(client)
+    make_users(client)
+    other = client.post(
+        "/api/users",
+        json={"name": "Third Admin", "username": "admin3", "password": "admin3x", "role": "admin"},
+    )
+    assert other.status_code == 201
+
+    login(client, "admin2", "admin2x")
+    resp = client.delete(f"/api/users/{other.json()['id']}")
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_delete_user(client):
+    login_admin(client)
+    _, user = make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.delete(f"/api/users/{user['id']}")
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_delete_creator(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.delete(f"/api/users/{me['id']}")
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_disable_creator(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{me['id']}", json={"is_active": False})
+    assert resp.status_code == 403
+
+
+def test_admin_cannot_disable_another_admin(client):
+    login_admin(client)
+    make_users(client)
+    other = client.post(
+        "/api/users",
+        json={"name": "Third Admin", "username": "admin3", "password": "admin3x", "role": "admin"},
+    )
+    assert other.status_code == 201
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{other.json()['id']}", json={"is_active": False})
+    assert resp.status_code == 403
+
+
+def test_password_reset_allows_admin_to_reset_user_and_login(client):
+    login_admin(client)
+    _, user = make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{user['id']}", json={"password": "newpass123"})
+    assert resp.status_code == 200
+
+    login(client, "plain1", "newpass123")
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+
+
+def test_admin_cannot_reset_creator_password(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{me['id']}", json={"password": "hacked"})
+    assert resp.status_code == 403
+
+
+def test_creator_can_edit_own_name_and_password(client):
+    login_admin(client)
+    me = client.get("/api/auth/me").json()
+
+    resp = client.patch(f"/api/users/{me['id']}", json={"name": "Owner"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Owner"
+
+    resp = client.patch(f"/api/users/{me['id']}", json={"password": "newcreatorpw"})
+    assert resp.status_code == 200
+
+    login(client, "admin", "newcreatorpw")
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_admin_can_change_own_password(client):
+    login_admin(client)
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{client.get('/api/auth/me').json()['id']}", json={"password": "rotated"})
+    assert resp.status_code == 200
+
+    login(client, "admin2", "rotated")
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_admin_can_disable_and_enable_user(client):
+    login_admin(client)
+    _, user = make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{user['id']}", json={"is_active": False})
+    assert resp.status_code == 200
+    assert resp.json()["is_active"] is False
+
+    resp = client.patch(f"/api/users/{user['id']}", json={"is_active": True})
+    assert resp.status_code == 200
+    assert resp.json()["is_active"] is True

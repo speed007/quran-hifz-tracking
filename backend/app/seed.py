@@ -30,9 +30,15 @@ def seed_database(db: Session) -> None:
                 name=settings.default_admin_name,
                 username=settings.default_admin_username,
                 password_hash=hash_password(settings.default_admin_password),
-                role="admin",
+                role="creator",
             )
         )
+    elif db.scalar(select(models.User).filter(models.User.role == "creator").limit(1)) is None:
+        first = db.scalar(
+            select(models.User).filter(models.User.role == "admin").order_by(models.User.id).limit(1)
+        )
+        if first is not None:
+            first.role = "creator"
 
     defaults = {
         "telegram_daily_time": settings.telegram_daily_time,
