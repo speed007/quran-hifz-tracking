@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 from datetime import datetime
@@ -49,13 +50,17 @@ class TelegramBot:
             MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text)
         )
         self._app = app
-        self._thread = threading.Thread(target=app.run_polling, daemon=True)
+        self._thread = threading.Thread(
+            target=app.run_polling,
+            kwargs={"stop_signals": ()},
+            daemon=True,
+        )
         self._thread.start()
         logger.info("Telegram bot started (polling)")
 
     def shutdown(self) -> None:
         if self._app is not None:
-            self._app.stop()
+            self._app.stop_running()
             self._app = None
 
     # ---- helpers -----------------------------------------------------------
