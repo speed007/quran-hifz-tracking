@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: quran-hifz-tracking:latest
+    container_name: hifz-app
+    env_file:
+      - .env
+    environment:
+      # Store the SQLite database on the persistent volume, not in the
+      # container's ephemeral filesystem.
+      HIFZ_DATABASE_URL: sqlite:////app/data/hifz.db
+    ports:
+      - "5101:5101"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5101/api/health', timeout=5).status == 200 else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: hifz-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARED_TOKEN}
+    env_file:
+      - .env
+    restart: unless-stopped

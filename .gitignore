@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# SQLite database
+*.db
+*.db-*
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# Docker volume data (SQLite lives here via ./data mount)
+data/*
+!data/.gitkeep
+
+# Environment / secrets
+.env
