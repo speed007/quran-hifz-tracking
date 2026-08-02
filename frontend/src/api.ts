@@ -7,6 +7,7 @@ export interface User {
   role: "creator" | "admin" | "user";
   telegram_id: number | null;
   is_active: boolean;
+  student_id: number | null;
 }
 
 export interface Surah {
@@ -41,6 +42,7 @@ export interface SessionDetail {
   from_page: number;
   to_page: number;
   date: string;
+  deadline: string | null;
   note: string | null;
   logged_by_id: number | null;
   created_at: string;
@@ -48,6 +50,7 @@ export interface SessionDetail {
   surah_name_ar: string | null;
   surah_name_en: string | null;
   logged_by_name: string | null;
+  assigned_by_name: string | null;
   juz_from: number | null;
   juz_to: number | null;
   ruku_from: number | null;
@@ -144,6 +147,7 @@ export const api = {
     kind: "new" | "revision";
     from_page: number;
     to_page: number;
+    deadline?: string;
     date?: string;
     note?: string;
   }) => request<SessionDetail>("/api/sessions", { method: "POST", body: JSON.stringify(body) }),

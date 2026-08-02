@@ -71,6 +71,7 @@ class SessionCreate(BaseModel):
     from_page: int
     to_page: int
     date: date_type | None = None
+    deadline: date_type | None = None
     note: str | None = None
 
 
@@ -98,6 +99,8 @@ class SessionDetail(SessionOut):
     juz_to: int | None = None
     ruku_from: int | None = None
     ruku_to: int | None = None
+    assigned_by_name: str | None = None
+    deadline: date_type | None = None
 
 
 class SectionMetaOut(BaseModel):

@@ -77,10 +77,12 @@ def list_sessions(
     kind: schemas.SessionKind | None = None,
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
-    _: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_user),
 ):
     q = db.query(models.Session)
-    if student_id is not None:
+    if user.role == "user" and user.student_id is not None:
+        q = q.filter(models.Session.student_id == user.student_id)
+    elif student_id is not None:
         q = q.filter(models.Session.student_id == student_id)
     if kind is not None:
         q = q.filter(models.Session.kind == kind)
@@ -95,10 +97,13 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
         student = db.get(models.Student, row.student_id)
         surah = db.get(models.Surah, row.surah_id)
         logged_by = db.get(models.User, row.logged_by_id) if row.logged_by_id else None
+        assigned_by = db.get(models.User, row.assigned_by_id) if row.assigned_by_id else None
         item.student_name = student.name if student else None
         item.surah_name_ar = surah.name_ar if surah else None
         item.surah_name_en = surah.name_en if surah else None
         item.logged_by_name = logged_by.name if logged_by else None
+        item.assigned_by_name = assigned_by.name if assigned_by else None
+        item.deadline = row.deadline
         if surah is not None:
             jz_from, jz_to, rk_from, rk_to = page_range_meta(
                 row.from_page, row.to_page
@@ -131,8 +136,10 @@ def create_session(
         from_page=payload.from_page,
         to_page=payload.to_page,
         date=payload.date or date.today(),
+        deadline=payload.deadline,
         note=payload.note,
         logged_by_id=user.id,
+        assigned_by_id=user.id,
     )
     db.add(row)
     db.commit()

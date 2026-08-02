@@ -14,19 +14,22 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 @router.get("", response_model=schemas.StatsOut)
 def stats(
-    db: Session = Depends(get_db), _: models.User = Depends(get_current_user)
+    db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
 ):
-    students = db.query(models.Student).order_by(models.Student.name).all()
+    if user.role == "user" and user.student_id is not None:
+        student = db.get(models.Student, user.student_id)
+        students = [student] if student else []
+    else:
+        students = db.query(models.Student).order_by(models.Student.name).all()
+
     progress = {
         s.id: compute_progress(db, s.id) for s in students
     }
 
-    recent = (
-        db.query(models.Session)
-        .order_by(models.Session.date.desc(), models.Session.id.desc())
-        .limit(15)
-        .all()
-    )
+    q = db.query(models.Session)
+    if user.role == "user":
+        q = q.filter(models.Session.student_id == user.student_id)
+    recent = q.order_by(models.Session.date.desc(), models.Session.id.desc()).limit(15).all()
     enriched = _enrich(db, recent)
 
     today = date.today()

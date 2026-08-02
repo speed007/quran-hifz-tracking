@@ -15,6 +15,11 @@ export default function Dashboard({ user }: { user: User }) {
   if (error) return <div className="card error">{error}</div>;
   if (!stats) return <div className="center">Loading…</div>;
 
+  const isStudent = user.role === "user";
+
+  const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
+  const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
+
   return (
     <div>
       <h1>Welcome, {user.name}</h1>
@@ -36,7 +41,7 @@ export default function Dashboard({ user }: { user: User }) {
 
       <h2>Progress</h2>
       <div className="cards">
-        {stats.students.map((student) => {
+        {displayStudents.map((student) => {
           const p = stats.progress[student.id];
           return (
             <div className="card" key={student.id}>
@@ -71,41 +76,51 @@ export default function Dashboard({ user }: { user: User }) {
             <th>Type</th>
             <th>Surah</th>
             <th>Pages</th>
+            <th>Deadline</th>
             <th>Juz</th>
             <th>Ruku</th>
             <th>Logged by</th>
           </tr>
         </thead>
         <tbody>
-          {stats.recent_sessions.map((s) => (
-            <tr key={s.id}>
-              <td>{s.date}</td>
-              <td>{s.student_name}</td>
-              <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
-              <td>{s.surah_name_en}</td>
-              <td>
-                {s.from_page}–{s.to_page}
-              </td>
-              <td>
-                {s.juz_from != null && s.juz_to != null
-                  ? s.juz_from === s.juz_to
-                    ? `Juz ${s.juz_from}`
-                    : `Juz ${s.juz_from}–${s.juz_to}`
-                  : "–"}
-              </td>
-              <td>
-                {s.ruku_from != null && s.ruku_to != null
-                  ? s.ruku_from === s.ruku_to
-                    ? `Ruku ${s.ruku_from}`
-                    : `Ruku ${s.ruku_from}–${s.ruku_to}`
-                  : "–"}
-              </td>
-              <td>{s.logged_by_name}</td>
-            </tr>
-          ))}
-          {stats.recent_sessions.length === 0 && (
+          {displaySessions.map((s) => {
+            const overdue =
+              s.deadline && new Date(s.deadline) < new Date() && s.date > s.deadline;
+            return (
+              <tr key={s.id} className={overdue ? "overdue" : ""}>
+                <td>{s.date}</td>
+                <td>{s.student_name}</td>
+                <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
+                <td>{s.surah_name_en}</td>
+                <td>
+                  {s.from_page}–{s.to_page}
+                </td>
+                <td>
+                  {s.deadline
+                    ? `${s.deadline}${overdue ? " ⚠️" : ""}`
+                    : "–"}
+                </td>
+                <td>
+                  {s.juz_from != null && s.juz_to != null
+                    ? s.juz_from === s.juz_to
+                      ? `Juz ${s.juz_from}`
+                      : `Juz ${s.juz_from}–${s.juz_to}`
+                    : "–"}
+                </td>
+                <td>
+                  {s.ruku_from != null && s.ruku_to != null
+                    ? s.ruku_from === s.ruku_to
+                      ? `Ruku ${s.ruku_from}`
+                      : `Ruku ${s.ruku_from}–${s.ruku_to}`
+                    : "–"}
+                </td>
+                <td>{s.logged_by_name}</td>
+              </tr>
+            );
+          })}
+          {displaySessions.length === 0 && (
             <tr>
-              <td colSpan={8} className="muted">
+              <td colSpan={9} className="muted">
                 No sessions yet.
               </td>
             </tr>

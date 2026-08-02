@@ -15,6 +15,7 @@ export default function LogSession({ user }: { user: User }) {
   const [fromPage, setFromPage] = useState("");
   const [toPage, setToPage] = useState("");
   const [date, setDate] = useState("");
+  const [deadline, setDeadline] = useState("");
   const [note, setNote] = useState("");
   const [surahRef, setSurahRef] = useState<string | null>(null);
   const [rukuList, setRukuList] = useState<number[]>([]);
@@ -100,6 +101,7 @@ export default function LogSession({ user }: { user: User }) {
         kind,
         from_page: Number(fromPage),
         to_page: Number(toPage) || Number(fromPage),
+        deadline: deadline || undefined,
         date: date || undefined,
         note: note || undefined,
       });
@@ -110,6 +112,7 @@ export default function LogSession({ user }: { user: User }) {
       setRukuTo("");
       setFromPage("");
       setToPage("");
+      setDeadline("");
       setNote("");
     } catch (err) {
       setError((err as Error).message);
@@ -231,6 +234,14 @@ export default function LogSession({ user }: { user: User }) {
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
         <label>
+          Deadline (optional)
+          <input
+            type="date"
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+          />
+        </label>
+        <label>
           Note (optional)
           <input value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
@@ -239,6 +250,7 @@ export default function LogSession({ user }: { user: User }) {
         {created && (
           <div className="card">
             {created.surah_name_en}, pages {created.from_page}–{created.to_page}
+            {created.deadline && ` · Deadline: ${created.deadline}`}
             {created.juz_from != null &&
               created.juz_to != null &&
               ` · Juz ${created.juz_from === created.juz_to ? created.juz_from : `${created.juz_from}–${created.juz_to}`}`}

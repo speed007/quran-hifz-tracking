@@ -37,6 +37,9 @@ class User(Base):
     telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    student_id: Mapped[int | None] = mapped_column(
+        ForeignKey("students.id", ondelete="SET NULL"), nullable=True
+    )
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="logged_by")
 
@@ -67,11 +70,16 @@ class Session(Base):
     logged_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    assigned_by_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     student: Mapped["Student"] = relationship(back_populates="sessions")
     surah: Mapped["Surah"] = relationship()
     logged_by: Mapped["User | None"] = relationship(back_populates="sessions")
+    assigned_by: Mapped["User | None"] = relationship(overlaps="logged_by,sessions")
 
 
 class Setting(Base):
