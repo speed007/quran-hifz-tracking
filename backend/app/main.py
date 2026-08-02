@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
@@ -94,4 +95,12 @@ def health():
 
 
 if FRONTEND_DIST.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(FRONTEND_DIST / "assets")),
+        name="assets",
+    )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str):
+        return FileResponse(FRONTEND_DIST / "index.html")
