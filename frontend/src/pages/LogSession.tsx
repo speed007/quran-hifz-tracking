@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, SessionDetail, Student, Surah, User } from "../api";
+import { api, SectionMeta, SessionDetail, Student, Surah, User } from "../api";
 
 export default function LogSession({ user }: { user: User }) {
   const [students, setStudents] = useState<Student[]>([]);
@@ -15,6 +15,7 @@ export default function LogSession({ user }: { user: User }) {
   const [toPage, setToPage] = useState("");
   const [date, setDate] = useState("");
   const [note, setNote] = useState("");
+  const [sectionMeta, setSectionMeta] = useState<SectionMeta | null>(null);
 
   useEffect(() => {
     api.students().then(setStudents).catch(() => {});
@@ -22,6 +23,19 @@ export default function LogSession({ user }: { user: User }) {
   }, []);
 
   const selectedSurah = surahs.find((s) => s.id === Number(surahId));
+
+  useEffect(() => {
+    const sid = Number(surahId);
+    const f = Number(fromPage);
+    const t = Number(toPage) || f;
+    setSectionMeta(null);
+    if (!selectedSurah || !sid || !f) return;
+    if (f < selectedSurah.start_page || t > selectedSurah.end_page) return;
+    api
+      .sectionMeta(sid, f, t)
+      .then(setSectionMeta)
+      .catch(() => setSectionMeta(null));
+  }, [surahId, fromPage, toPage, selectedSurah]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -108,6 +122,16 @@ export default function LogSession({ user }: { user: User }) {
             />
           </label>
         </div>
+        {sectionMeta && (
+          <p className="success">
+            Juz {sectionMeta.juz_from === sectionMeta.juz_to
+              ? sectionMeta.juz_from
+              : `${sectionMeta.juz_from}–${sectionMeta.juz_to}`}{" "}
+            · Ruku {sectionMeta.ruku_from === sectionMeta.ruku_to
+              ? sectionMeta.ruku_from
+              : `${sectionMeta.ruku_from}–${sectionMeta.ruku_to}`}
+          </p>
+        )}
         <label>
           Date (defaults to today)
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />

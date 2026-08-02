@@ -27,6 +27,29 @@ def validate_session_pages(db: Session, payload: schemas.SessionCreate) -> None:
         raise HTTPException(status_code=400, detail="from_page must be <= to_page")
 
 
+@router.get("/section-meta", response_model=schemas.SectionMetaOut)
+def section_meta(
+    surah_id: int,
+    from_page: int,
+    to_page: int,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    surah = db.get(models.Surah, surah_id)
+    if surah is None:
+        raise HTTPException(status_code=400, detail="Unknown surah")
+    if from_page < surah.start_page or to_page > surah.end_page:
+        raise HTTPException(status_code=400, detail="Pages outside surah range")
+    if from_page > to_page:
+        raise HTTPException(status_code=400, detail="from_page must be <= to_page")
+    jz_from, jz_to, rk_from, rk_to = page_range_meta(
+        surah.number, from_page, to_page
+    )
+    return schemas.SectionMetaOut(
+        juz_from=jz_from, juz_to=jz_to, ruku_from=rk_from, ruku_to=rk_to
+    )
+
+
 @router.get("", response_model=list[schemas.SessionDetail])
 def list_sessions(
     student_id: int | None = Query(default=None),

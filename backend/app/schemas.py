@@ -101,6 +101,13 @@ class SessionDetail(SessionOut):
     ruku_to: int | None = None
 
 
+class SectionMetaOut(BaseModel):
+    juz_from: int
+    juz_to: int
+    ruku_from: int
+    ruku_to: int
+
+
 class LinkCodeOut(BaseModel):
     code: str
     expires_at: datetime

@@ -143,6 +143,39 @@ def test_from_page_greater_than_to_page_returns_400(client):
     assert resp.status_code == 400
 
 
+def test_section_meta_returns_juz_and_ruku(client):
+    login_admin(client)
+    yasin = surah_id_by_number(client, 36)
+
+    resp = client.get(
+        f"/api/sessions/section-meta?surah_id={yasin}&from_page=440&to_page=442"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"juz_from": 22, "juz_to": 23, "ruku_from": 381, "ruku_to": 383}
+
+    resp = client.get(
+        f"/api/sessions/section-meta?surah_id={yasin}&from_page=440&to_page=441"
+    )
+    assert resp.json()["ruku_from"] == 381
+    assert resp.json()["ruku_to"] == 382
+
+
+def test_section_meta_rejects_out_of_range_pages(client):
+    login_admin(client)
+    yasin = surah_id_by_number(client, 36)
+
+    resp = client.get(
+        f"/api/sessions/section-meta?surah_id={yasin}&from_page=100&to_page=102"
+    )
+    assert resp.status_code == 400
+
+    resp = client.get(
+        f"/api/sessions/section-meta?surah_id={yasin}&from_page=442&to_page=440"
+    )
+    assert resp.status_code == 400
+
+
 def test_non_admin_can_read_but_not_create_sessions(client):
     login_admin(client)
 

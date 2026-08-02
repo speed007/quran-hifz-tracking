@@ -68,6 +68,13 @@ export interface Settings {
   revision_lookback_pages: number;
 }
 
+export interface SectionMeta {
+  juz_from: number;
+  juz_to: number;
+  ruku_from: number;
+  ruku_to: number;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -115,6 +122,10 @@ export const api = {
   surahs: () => request<Surah[]>("/api/surahs"),
 
   sessions: () => request<SessionDetail[]>("/api/sessions"),
+  sectionMeta: (surahId: number, fromPage: number, toPage: number) =>
+    request<SectionMeta>(
+      `/api/sessions/section-meta?surah_id=${surahId}&from_page=${fromPage}&to_page=${toPage}`
+    ),
   createSession: (body: {
     student_id: number;
     kind: "new" | "revision";
