@@ -18,6 +18,7 @@ export default function LogSession({ user }: { user: User }) {
   const [note, setNote] = useState("");
   const [surahRef, setSurahRef] = useState<string | null>(null);
   const [rukuList, setRukuList] = useState<number[]>([]);
+  const [firstRuku, setFirstRuku] = useState(0);
 
   useEffect(() => {
     api.students().then(setStudents).catch(() => {});
@@ -36,10 +37,11 @@ export default function LogSession({ user }: { user: User }) {
     api
       .rukusInJuz(Number(juz))
       .then((data) => {
+        setFirstRuku(data.first_ruku);
         setRukuList(data.rukus);
         if (data.rukus.length > 0) {
-          setRukuFrom(String(data.rukus[0]));
-          setRukuTo(String(data.rukus[data.rukus.length - 1]));
+          setRukuFrom("1");
+          setRukuTo(String(data.rukus.length));
         } else {
           setRukuFrom("");
           setRukuTo("");
@@ -55,16 +57,18 @@ export default function LogSession({ user }: { user: User }) {
       setSurahRef(null);
       return;
     }
-    const from = Number(rukuFrom);
-    const to = Number(rukuTo);
-    if (from > to) {
+    const localFrom = Number(rukuFrom);
+    const localTo = Number(rukuTo);
+    if (localFrom > localTo) {
       setFromPage("");
       setToPage("");
       setSurahRef(null);
       return;
     }
+    const globalFrom = firstRuku + localFrom - 1;
+    const globalTo = firstRuku + localTo - 1;
     const promises = [];
-    for (let r = from; r <= to; r++) {
+    for (let r = globalFrom; r <= globalTo; r++) {
       promises.push(api.rukuPages(r));
     }
     Promise.all(promises)
@@ -83,7 +87,7 @@ export default function LogSession({ user }: { user: User }) {
         setToPage("");
         setSurahRef(null);
       });
-  }, [rukuFrom, rukuTo]);
+  }, [rukuFrom, rukuTo, firstRuku]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -165,9 +169,9 @@ export default function LogSession({ user }: { user: User }) {
               required
             >
               <option value="">—</option>
-              {rukuList.map((r) => (
-                <option key={r} value={r}>
-                  Ruku {r}
+              {rukuList.map((r, i) => (
+                <option key={r} value={i + 1}>
+                  Ruku {i + 1}
                 </option>
               ))}
             </select>
@@ -180,9 +184,9 @@ export default function LogSession({ user }: { user: User }) {
               required
             >
               <option value="">—</option>
-              {rukuList.map((r) => (
-                <option key={r} value={r}>
-                  Ruku {r}
+              {rukuList.map((r, i) => (
+                <option key={r} value={i + 1}>
+                  Ruku {i + 1}
                 </option>
               ))}
             </select>
