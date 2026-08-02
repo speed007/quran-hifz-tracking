@@ -1,12 +1,36 @@
-:root {
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --card-hover: #243447;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --primary: #14b8a6;
+  --primary-dark: #0d9488;
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.12);
+  --row-hover: #243447;
+  --input-bg: #0f172a;
+  --code-bg: #0f172a;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
   --bg: #f4f6f9;
   --card: #ffffff;
+  --card-hover: #f9fafb;
   --border: #e2e6ec;
   --text: #1f2a37;
   --muted: #6b7684;
   --primary: #0f766e;
   --primary-dark: #115e59;
   --danger: #b91c1c;
+  --danger-bg: #fde8e8;
+  --row-hover: #f9fafb;
+  --input-bg: #ffffff;
+  --code-bg: #eef1f5;
 }
 
 * {
@@ -18,6 +42,7 @@ body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .center {
@@ -36,7 +61,7 @@ body {
 .nav {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.4rem;
   padding: 1rem 0;
   border-bottom: 1px solid var(--border);
   margin-bottom: 1.5rem;
@@ -47,13 +72,19 @@ body {
   font-weight: 700;
   margin-right: auto;
   color: var(--primary);
+  font-size: 1.05rem;
 }
 
 .nav a {
-  color: var(--text);
+  color: var(--muted);
   text-decoration: none;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.nav a:hover {
+  color: var(--text);
 }
 
 .nav a.active {
@@ -63,17 +94,31 @@ body {
 
 .link-button {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.link-button:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 1.25rem;
+  transition: background-color 0.25s ease;
 }
 
 .cards {
@@ -116,7 +161,7 @@ body {
 }
 
 .success {
-  color: var(--primary-dark);
+  color: var(--primary);
 }
 
 table {
@@ -124,8 +169,12 @@ table {
   border-collapse: collapse;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
+}
+
+tbody tr:hover {
+  background: var(--row-hover);
 }
 
 th,
@@ -136,8 +185,12 @@ td {
   font-size: 0.92rem;
 }
 
+tr:last-child td {
+  border-bottom: none;
+}
+
 th {
-  background: #f9fafb;
+  background: var(--row-hover);
   font-weight: 600;
 }
 
@@ -149,6 +202,7 @@ button {
   padding: 0.55rem 1.1rem;
   font-size: 0.95rem;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
 button:hover {
@@ -156,8 +210,13 @@ button:hover {
 }
 
 button.danger {
-  background: #fde8e8;
+  background: var(--danger-bg);
   color: var(--danger);
+}
+
+button.danger:hover {
+  background: var(--danger);
+  color: #fff;
 }
 
 input,
@@ -167,7 +226,14 @@ select {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 0.95rem;
-  background: #fff;
+  background: var(--input-bg);
+  color: var(--text);
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
 }
 
 .form {
@@ -209,9 +275,10 @@ select {
 }
 
 code {
-  background: #eef1f5;
+  background: var(--code-bg);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
+  border: 1px solid var(--border);
 }
 
 h1 {

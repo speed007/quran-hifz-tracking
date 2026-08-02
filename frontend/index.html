@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Qur'an Hifz Tracker</title>
+    <script>
+      (function () {
+        var theme = localStorage.getItem("hifz-theme");
+        if (!theme) {
+          theme = "dark";
+          localStorage.setItem("hifz-theme", theme);
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
