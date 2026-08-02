@@ -42,7 +42,7 @@ def _assert_can_update(actor: models.User, target: models.User, payload: schemas
 
 @router.get("", response_model=list[schemas.UserOut])
 def list_users(
-    db: Session = Depends(get_db), _: models.User = Depends(require_admin)
+    db: Session = Depends(get_db), _: models.User = Depends(require_creator),
 ):
     return db.query(models.User).order_by(models.User.id).all()
 
@@ -51,7 +51,7 @@ def list_users(
 def create_user(
     payload: schemas.UserCreate,
     db: Session = Depends(get_db),
-    actor: models.User = Depends(require_admin),
+    actor: models.User = Depends(require_creator),
 ):
     if payload.role == "admin" and actor.role != "creator":
         raise HTTPException(status_code=403, detail="Only the creator can create admins")
@@ -74,7 +74,7 @@ def update_user(
     user_id: int,
     payload: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    actor: models.User = Depends(require_admin),
+    actor: models.User = Depends(require_creator),
 ):
     user = db.get(models.User, user_id)
     if user is None:

@@ -392,11 +392,10 @@ def test_admin_cannot_disable_another_admin(client):
     assert resp.status_code == 403
 
 
-def test_password_reset_allows_admin_to_reset_user_and_login(client):
+def test_creator_can_reset_user_password(client):
     login_admin(client)
     _, user = make_users(client)
 
-    login(client, "admin2", "admin2x")
     resp = client.patch(f"/api/users/{user['id']}", json={"password": "newpass123"})
     assert resp.status_code == 200
 
@@ -430,27 +429,19 @@ def test_creator_can_edit_own_name_and_password(client):
     assert client.get("/api/auth/me").status_code == 200
 
 
-def test_admin_can_change_own_password(client):
+def test_admin_cannot_change_own_password(client):
     login_admin(client)
     make_users(client)
 
     login(client, "admin2", "admin2x")
     resp = client.patch(f"/api/users/{client.get('/api/auth/me').json()['id']}", json={"password": "rotated"})
-    assert resp.status_code == 200
-
-    login(client, "admin2", "rotated")
-    assert client.get("/api/auth/me").status_code == 200
+    assert resp.status_code == 403
 
 
-def test_admin_can_disable_and_enable_user(client):
+def test_admin_cannot_disable_user(client):
     login_admin(client)
     _, user = make_users(client)
 
     login(client, "admin2", "admin2x")
     resp = client.patch(f"/api/users/{user['id']}", json={"is_active": False})
-    assert resp.status_code == 200
-    assert resp.json()["is_active"] is False
-
-    resp = client.patch(f"/api/users/{user['id']}", json={"is_active": True})
-    assert resp.status_code == 200
-    assert resp.json()["is_active"] is True
+    assert resp.status_code == 403
