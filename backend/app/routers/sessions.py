@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_current_user, get_db, require_admin
+from ..quran_meta import page_range_meta
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -54,6 +55,12 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
         item.surah_name_ar = surah.name_ar if surah else None
         item.surah_name_en = surah.name_en if surah else None
         item.logged_by_name = logged_by.name if logged_by else None
+        if surah is not None:
+            jz_from, jz_to, rk_from, rk_to = page_range_meta(
+                surah.number, row.from_page, row.to_page
+            )
+            item.juz_from, item.juz_to = jz_from, jz_to
+            item.ruku_from, item.ruku_to = rk_from, rk_to
         out.append(item)
     return out
 

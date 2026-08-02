@@ -95,6 +95,10 @@ class SessionDetail(SessionOut):
     surah_name_ar: str | None = None
     surah_name_en: str | None = None
     logged_by_name: str | None = None
+    juz_from: int | None = None
+    juz_to: int | None = None
+    ruku_from: int | None = None
+    ruku_to: int | None = None
 
 
 class LinkCodeOut(BaseModel):

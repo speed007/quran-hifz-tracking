@@ -1,11 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, Student, Surah, User } from "../api";
+import { api, SessionDetail, Student, Surah, User } from "../api";
 
 export default function LogSession({ user }: { user: User }) {
   const [students, setStudents] = useState<Student[]>([]);
   const [surahs, setSurahs] = useState<Surah[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [created, setCreated] = useState<SessionDetail | null>(null);
 
   const [studentId, setStudentId] = useState("");
   const [kind, setKind] = useState<"new" | "revision">("new");
@@ -26,8 +27,9 @@ export default function LogSession({ user }: { user: User }) {
     e.preventDefault();
     setError("");
     setMessage("");
+    setCreated(null);
     try {
-      await api.createSession({
+      const saved = await api.createSession({
         student_id: Number(studentId),
         kind,
         surah_id: Number(surahId),
@@ -37,6 +39,7 @@ export default function LogSession({ user }: { user: User }) {
         note: note || undefined,
       });
       setMessage("Session logged.");
+      setCreated(saved);
       setFromPage("");
       setToPage("");
       setNote("");
@@ -115,6 +118,17 @@ export default function LogSession({ user }: { user: User }) {
         </label>
         {error && <p className="error">{error}</p>}
         {message && <p className="success">{message}</p>}
+        {created && (
+          <div className="card">
+            {created.surah_name_en}, pages {created.from_page}–{created.to_page}
+            {created.juz_from != null &&
+              created.juz_to != null &&
+              ` · Juz ${created.juz_from === created.juz_to ? created.juz_from : `${created.juz_from}–${created.juz_to}`}`}
+            {created.ruku_from != null &&
+              created.ruku_to != null &&
+              ` · Ruku ${created.ruku_from === created.ruku_to ? created.ruku_from : `${created.ruku_from}–${created.ruku_to}`}`}
+          </div>
+        )}
         <button type="submit">Save session</button>
       </form>
     </div>

@@ -46,6 +46,10 @@ export interface SessionDetail {
   surah_name_ar: string | null;
   surah_name_en: string | null;
   logged_by_name: string | null;
+  juz_from: number | null;
+  juz_to: number | null;
+  ruku_from: number | null;
+  ruku_to: number | null;
 }
 
 export interface Stats {

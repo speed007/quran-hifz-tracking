@@ -70,6 +70,8 @@ export default function Dashboard({ user }: { user: User }) {
             <th>Type</th>
             <th>Surah</th>
             <th>Pages</th>
+            <th>Juz</th>
+            <th>Ruku</th>
             <th>Logged by</th>
           </tr>
         </thead>
@@ -83,12 +85,26 @@ export default function Dashboard({ user }: { user: User }) {
               <td>
                 {s.from_page}–{s.to_page}
               </td>
+              <td>
+                {s.juz_from != null && s.juz_to != null
+                  ? s.juz_from === s.juz_to
+                    ? `Juz ${s.juz_from}`
+                    : `Juz ${s.juz_from}–${s.juz_to}`
+                  : "–"}
+              </td>
+              <td>
+                {s.ruku_from != null && s.ruku_to != null
+                  ? s.ruku_from === s.ruku_to
+                    ? `Ruku ${s.ruku_from}`
+                    : `Ruku ${s.ruku_from}–${s.ruku_to}`
+                  : "–"}
+              </td>
               <td>{s.logged_by_name}</td>
             </tr>
           ))}
           {stats.recent_sessions.length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">
+              <td colSpan={8} className="muted">
                 No sessions yet.
               </td>
             </tr>

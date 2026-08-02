@@ -96,10 +96,16 @@ def test_sessions_and_stats_progress(client):
     new_resp = create_session(client, student["id"], "new", yasin, 440, 442)
     assert new_resp.status_code == 201
     assert new_resp.json()["kind"] == "new"
+    assert new_resp.json()["juz_from"] == 22
+    assert new_resp.json()["juz_to"] == 23
+    assert new_resp.json()["ruku_from"] == 381
+    assert new_resp.json()["ruku_to"] == 383
 
     rev_resp = create_session(client, student["id"], "revision", yasin, 440, 441)
     assert rev_resp.status_code == 201
     assert rev_resp.json()["kind"] == "revision"
+    assert rev_resp.json()["ruku_from"] == 381
+    assert rev_resp.json()["ruku_to"] == 382
 
     stats = client.get("/api/stats")
     assert stats.status_code == 200
@@ -108,8 +114,12 @@ def test_sessions_and_stats_progress(client):
     progress = body["progress"][str(student["id"])]
     assert progress["memorised_pages"] == 3
 
-    recent_kinds = {s["kind"] for s in body["recent_sessions"]}
-    assert recent_kinds == {"new", "revision"}
+    recent = {s["kind"]: s for s in body["recent_sessions"]}
+    assert set(recent) == {"new", "revision"}
+    assert recent["new"]["juz_from"] == 22
+    assert recent["new"]["juz_to"] == 23
+    assert recent["new"]["ruku_from"] == 381
+    assert recent["new"]["ruku_to"] == 383
     assert body["total_sessions"] == 2
 
 

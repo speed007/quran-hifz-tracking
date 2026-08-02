@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_current_user, get_db
+from ..routers.sessions import _enrich
 from ..services.progress import compute_progress
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -26,17 +27,7 @@ def stats(
         .limit(15)
         .all()
     )
-    enriched = []
-    for row in recent:
-        item = schemas.SessionDetail.model_validate(row)
-        student = db.get(models.Student, row.student_id)
-        surah = db.get(models.Surah, row.surah_id)
-        logged_by = db.get(models.User, row.logged_by_id) if row.logged_by_id else None
-        item.student_name = student.name if student else None
-        item.surah_name_ar = surah.name_ar if surah else None
-        item.surah_name_en = surah.name_en if surah else None
-        item.logged_by_name = logged_by.name if logged_by else None
-        enriched.append(item)
+    enriched = _enrich(db, recent)
 
     today = date.today()
     today_activity = (
