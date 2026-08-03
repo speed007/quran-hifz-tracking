@@ -100,6 +100,8 @@ def test_sessions_and_stats_progress(client):
     assert new_resp.json()["juz_to"] == 23
     assert new_resp.json()["ruku_from"] == 381
     assert new_resp.json()["ruku_to"] == 383
+    assert new_resp.json()["completed"] is False
+    assert new_resp.json()["completed_at"] is None
 
     rev_resp = create_session(client, student["id"], "revision", yasin, 440, 441)
     assert rev_resp.status_code == 201
@@ -107,12 +109,13 @@ def test_sessions_and_stats_progress(client):
     assert rev_resp.json()["ruku_from"] == 381
     assert rev_resp.json()["ruku_to"] == 382
 
+    # Pending sessions must not count toward progress yet.
     stats = client.get("/api/stats")
     assert stats.status_code == 200
     body = stats.json()
 
     progress = body["progress"][str(student["id"])]
-    assert progress["memorised_pages"] == 3
+    assert progress["memorised_pages"] == 0
 
     recent = {s["kind"]: s for s in body["recent_sessions"]}
     assert set(recent) == {"new", "revision"}
@@ -121,6 +124,115 @@ def test_sessions_and_stats_progress(client):
     assert recent["new"]["ruku_from"] == 381
     assert recent["new"]["ruku_to"] == 383
     assert body["total_sessions"] == 2
+
+    # Completing the new session unlocks its pages.
+    done = client.patch(
+        f"/api/sessions/{new_resp.json()['id']}/complete", json={"completed": True}
+    )
+    assert done.status_code == 200
+    assert done.json()["completed"] is True
+    assert done.json()["completed_at"] is not None
+
+    body = client.get("/api/stats").json()
+    progress = body["progress"][str(student["id"])]
+    assert progress["memorised_pages"] == 3
+
+
+def test_complete_unknown_session_returns_404(client):
+    login_admin(client)
+    resp = client.patch("/api/sessions/9999/complete", json={"completed": True})
+    assert resp.status_code == 404
+
+
+def test_complete_requires_auth(client):
+    resp = client.patch("/api/sessions/1/complete", json={"completed": True})
+    assert resp.status_code == 401
+
+
+def link_student_to_user(student_id, username):
+    from backend.app.database import SessionLocal
+    from backend.app.models import User
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        user.student_id = student_id
+        db.commit()
+        return user.id
+    finally:
+        db.close()
+
+
+def test_student_can_tick_own_session(client):
+    login_admin(client)
+
+    student = create_student(client, "Hafiz").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 442)
+    assert created.status_code == 201
+
+    client.post(
+        "/api/users",
+        json={"name": "Hafiz User", "username": "hafiz1", "password": "hafiz123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "hafiz1")
+    login(client, "hafiz1", "hafiz123")
+
+    resp = client.patch(
+        f"/api/sessions/{created.json()['id']}/complete", json={"completed": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["completed"] is True
+
+    stats = client.get("/api/stats").json()
+    progress = stats["progress"][str(student["id"])]
+    assert progress["memorised_pages"] == 3
+
+    # Untick resets progress.
+    resp = client.patch(
+        f"/api/sessions/{created.json()['id']}/complete", json={"completed": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["completed"] is False
+    assert resp.json()["completed_at"] is None
+    stats = client.get("/api/stats").json()
+    assert stats["progress"][str(student["id"])]["memorised_pages"] == 0
+
+
+def test_student_cannot_tick_someone_elses_session(client):
+    login_admin(client)
+
+    own = create_student(client, "Mine").json()
+    other = create_student(client, "Theirs").json()
+    yasin = surah_id_by_number(client, 36)
+    other_session = create_session(client, other["id"], "new", yasin, 440, 441)
+    assert other_session.status_code == 201
+
+    client.post(
+        "/api/users",
+        json={"name": "Mine User", "username": "mine1", "password": "mine123", "role": "user"},
+    )
+    link_student_to_user(own["id"], "mine1")
+    login(client, "mine1", "mine123")
+
+    resp = client.patch(
+        f"/api/sessions/{other_session.json()['id']}/complete", json={"completed": True}
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_can_tick_any_session(client):
+    login_admin(client)
+
+    student = create_student(client, "Anyone").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 442)
+
+    resp = client.patch(
+        f"/api/sessions/{created.json()['id']}/complete", json={"completed": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["completed"] is True
 
 
 def test_pages_outside_valid_range_returns_400(client):

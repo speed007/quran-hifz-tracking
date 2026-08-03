@@ -88,6 +88,12 @@ class SessionOut(BaseModel):
     note: str | None = None
     logged_by_id: int | None = None
     created_at: datetime
+    completed: bool = False
+    completed_at: datetime | None = None
+
+
+class SessionCompleteIn(BaseModel):
+    completed: bool
 
 
 class SessionDetail(SessionOut):

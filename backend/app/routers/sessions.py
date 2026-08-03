@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..deps import get_current_user, get_db, require_admin
 from ..quran_meta import page_range_meta, page_of_ayah, page_to_surah_number, rukus_in_juz, ruku_page_range
+from ..security import utcnow
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -142,6 +143,29 @@ def create_session(
         assigned_by_id=user.id,
     )
     db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _enrich(db, [row])[0]
+
+
+@router.patch("/{session_id}/complete", response_model=schemas.SessionDetail)
+def set_session_completed(
+    session_id: int,
+    payload: schemas.SessionCompleteIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Mark a session as completed (student ticks their own; admins may tick any)."""
+    row = db.get(models.Session, session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if user.role == "user":
+        if user.student_id is None or row.student_id != user.student_id:
+            raise HTTPException(
+                status_code=403, detail="You can only complete your own sessions"
+            )
+    row.completed = payload.completed
+    row.completed_at = utcnow() if payload.completed else None
     db.commit()
     db.refresh(row)
     return _enrich(db, [row])[0]

@@ -6,12 +6,13 @@ from ..quran_meta import page_range_meta
 
 
 def compute_progress(db: Session, student_id: int) -> schemas.ProgressOut:
-    """Memorised pages are the union of pages covered by 'new' sessions."""
+    """Memorised pages are the union of pages covered by completed 'new' sessions."""
     new_rows = (
         db.query(models.Session)
         .filter(
             models.Session.student_id == student_id,
             models.Session.kind == "new",
+            models.Session.completed == True,  # noqa: E712
         )
         .all()
     )
@@ -36,6 +37,7 @@ def compute_progress(db: Session, student_id: int) -> schemas.ProgressOut:
         .filter(
             models.Session.student_id == student_id,
             models.Session.kind == "new",
+            models.Session.completed == True,  # noqa: E712
         )
         .order_by(models.Session.id.desc())
         .first()

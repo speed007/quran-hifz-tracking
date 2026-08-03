@@ -74,6 +74,8 @@ class Session(Base):
         Integer, nullable=True
     )
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     student: Mapped["Student"] = relationship(back_populates="sessions")

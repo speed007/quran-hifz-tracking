@@ -53,6 +53,17 @@ def migrate_db(db: SessionLocal) -> None:
             "ALTER TABLE sessions ADD COLUMN assigned_by_id INTEGER REFERENCES users(id)"
         )
         conn.commit()
+    if "completed" not in columns:
+        cursor.execute(
+            "ALTER TABLE sessions ADD COLUMN completed BOOLEAN NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+        # Existing sessions were logged as done work, so backfill them as completed.
+        cursor.execute("UPDATE sessions SET completed = 1")
+        conn.commit()
+    if "completed_at" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN completed_at DATETIME")
+        conn.commit()
 
 
 @asynccontextmanager

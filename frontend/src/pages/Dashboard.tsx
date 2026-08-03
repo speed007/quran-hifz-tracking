@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { api, Stats, User } from "../api";
+import { api, SessionDetail, Stats, User } from "../api";
 
 export default function Dashboard({ user }: { user: User }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
+  const [ticking, setTicking] = useState<number | null>(null);
 
   useEffect(() => {
     api
@@ -19,6 +20,18 @@ export default function Dashboard({ user }: { user: User }) {
 
   const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
+
+  async function toggleComplete(s: SessionDetail, completed: boolean) {
+    setTicking(s.id);
+    try {
+      await api.setSessionCompleted(s.id, completed);
+      setStats(await api.stats());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setTicking(null);
+    }
+  }
 
   return (
     <div>
@@ -71,6 +84,7 @@ export default function Dashboard({ user }: { user: User }) {
       <table>
         <thead>
           <tr>
+            <th>Done</th>
             <th>Date</th>
             <th>Student</th>
             <th>Type</th>
@@ -84,10 +98,24 @@ export default function Dashboard({ user }: { user: User }) {
         </thead>
         <tbody>
           {displaySessions.map((s) => {
-            const overdue =
-              s.deadline && new Date(s.deadline) < new Date() && s.date > s.deadline;
+            const overdue = !s.completed && !!s.deadline && new Date(s.deadline) < new Date();
             return (
-              <tr key={s.id} className={overdue ? "overdue" : ""}>
+              <tr key={s.id} className={`${overdue ? "overdue" : ""} ${s.completed ? "completed-row" : ""}`}>
+                <td>
+                  {isStudent ? (
+                    <input
+                      type="checkbox"
+                      checked={!!s.completed}
+                      disabled={ticking === s.id}
+                      aria-label={`Mark ${s.surah_name_en ?? "session"} ${s.completed ? "as pending" : "as completed"}`}
+                      onChange={(e) => toggleComplete(s, e.target.checked)}
+                    />
+                  ) : (
+                    <span className={s.completed ? "done-badge" : "pending-badge"}>
+                      {s.completed ? "✓ Done" : "Pending"}
+                    </span>
+                  )}
+                </td>
                 <td>{s.date}</td>
                 <td>{s.student_name}</td>
                 <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
@@ -120,7 +148,7 @@ export default function Dashboard({ user }: { user: User }) {
           })}
           {displaySessions.length === 0 && (
             <tr>
-              <td colSpan={9} className="muted">
+              <td colSpan={10} className="muted">
                 No sessions yet.
               </td>
             </tr>

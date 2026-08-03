@@ -55,6 +55,8 @@ export interface SessionDetail {
   juz_to: number | null;
   ruku_from: number | null;
   ruku_to: number | null;
+  completed: boolean;
+  completed_at: string | null;
 }
 
 export interface Stats {
@@ -152,6 +154,11 @@ export const api = {
     note?: string;
   }) => request<SessionDetail>("/api/sessions", { method: "POST", body: JSON.stringify(body) }),
   deleteSession: (id: number) => request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
+  setSessionCompleted: (id: number, completed: boolean) =>
+    request<SessionDetail>(`/api/sessions/${id}/complete`, {
+      method: "PATCH",
+      body: JSON.stringify({ completed }),
+    }),
 
   stats: () => request<Stats>("/api/stats"),
 
