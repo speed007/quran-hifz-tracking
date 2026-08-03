@@ -289,3 +289,78 @@ h2 {
   font-size: 1.15rem;
   margin-top: 1.75rem;
 }
+
+@media (max-width: 768px) {
+  .nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+
+  .nav a,
+  .link-button {
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .brand {
+    font-size: 0.95rem;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  th,
+  td {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.82rem;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .card.stat strong {
+    font-size: 1.4rem;
+  }
+
+  .form {
+    max-width: 100%;
+  }
+
+  .row {
+    flex-direction: column;
+  }
+
+  h1 {
+    font-size: 1.2rem;
+  }
+
+  h2 {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app {
+    padding: 0 0.5rem 2rem;
+  }
+
+  .nav {
+    padding: 0.5rem 0;
+    margin-bottom: 1rem;
+  }
+
+  .card {
+    padding: 0.75rem;
+  }
+
+  th,
+  td {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.78rem;
+  }
+}
