@@ -131,6 +131,10 @@ if FRONTEND_DIST.exists():
         name="assets",
     )
 
+    @app.get("/favicon.png", include_in_schema=False)
+    def favicon():
+        return FileResponse(FRONTEND_DIST / "favicon.png")
+
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa(full_path: str):
         return FileResponse(FRONTEND_DIST / "index.html")
