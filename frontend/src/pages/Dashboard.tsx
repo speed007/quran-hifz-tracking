@@ -74,10 +74,12 @@ export default function Dashboard({ user }: { user: User }) {
             <th>Date</th>
             <th>Student</th>
             <th>Type</th>
+            <th className="hide-mobile">Surah</th>
             <th>Pages</th>
             <th>Deadline</th>
             <th>Juz</th>
             <th>Ruku</th>
+            <th className="hide-mobile">Logged by</th>
           </tr>
         </thead>
         <tbody>
@@ -89,6 +91,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <td>{s.date}</td>
                 <td>{s.student_name}</td>
                 <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
+                <td className="hide-mobile">{s.surah_name_en}</td>
                 <td>
                   {s.from_page}–{s.to_page}
                 </td>
@@ -111,12 +114,13 @@ export default function Dashboard({ user }: { user: User }) {
                       : `Ruku ${s.ruku_from}–${s.ruku_to}`
                     : "–"}
                 </td>
+                <td className="hide-mobile">{s.logged_by_name}</td>
               </tr>
             );
           })}
           {displaySessions.length === 0 && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={9} className="muted">
                 No sessions yet.
               </td>
             </tr>

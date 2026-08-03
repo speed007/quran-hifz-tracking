@@ -328,6 +328,10 @@ h2 {
     font-size: 0.82rem;
   }
 
+  .hide-mobile {
+    display: none;
+  }
+
   .cards {
     grid-template-columns: 1fr;
   }
