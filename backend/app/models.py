@@ -41,7 +41,9 @@ class User(Base):
         ForeignKey("students.id", ondelete="SET NULL"), nullable=True
     )
 
-    sessions: Mapped[list["Session"]] = relationship(back_populates="logged_by")
+    sessions: Mapped[list["Session"]] = relationship(
+        back_populates="logged_by", foreign_keys="Session.logged_by_id"
+    )
 
 
 class Student(Base):
@@ -71,17 +73,26 @@ class Session(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     assigned_by_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    rated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     student: Mapped["Student"] = relationship(back_populates="sessions")
     surah: Mapped["Surah"] = relationship()
-    logged_by: Mapped["User | None"] = relationship(back_populates="sessions")
-    assigned_by: Mapped["User | None"] = relationship(overlaps="logged_by,sessions")
+    logged_by: Mapped["User | None"] = relationship(
+        back_populates="sessions", foreign_keys="Session.logged_by_id"
+    )
+    assigned_by: Mapped["User | None"] = relationship(
+        foreign_keys="Session.assigned_by_id", overlaps="logged_by,sessions"
+    )
 
 
 class Setting(Base):

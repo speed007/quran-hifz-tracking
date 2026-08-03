@@ -90,10 +90,17 @@ class SessionOut(BaseModel):
     created_at: datetime
     completed: bool = False
     completed_at: datetime | None = None
+    rating: int | None = None
+    feedback: str | None = None
 
 
 class SessionCompleteIn(BaseModel):
     completed: bool
+
+
+class SessionRatingIn(BaseModel):
+    rating: int | None = Field(default=None, ge=1, le=5)
+    feedback: str | None = Field(default=None, max_length=1000)
 
 
 class SessionDetail(SessionOut):
@@ -107,6 +114,7 @@ class SessionDetail(SessionOut):
     ruku_to: int | None = None
     assigned_by_name: str | None = None
     deadline: date_type | None = None
+    rated_by_name: str | None = None
 
 
 class SectionMetaOut(BaseModel):
@@ -147,9 +155,23 @@ class ProgressOut(BaseModel):
     current_page: int | None = None
 
 
+class JuzSummaryOut(BaseModel):
+    juz: int
+    page_from: int
+    page_to: int
+    pages_memorised: int
+    total_pages: int
+    complete: bool
+    sessions: int
+    rated_sessions: int
+    avg_rating: float | None = None
+    duration_days: int | None = None
+
+
 class StatsOut(BaseModel):
     students: list[StudentOut]
     progress: dict[int, ProgressOut]
     recent_sessions: list[SessionDetail]
     today_activity: int
     total_sessions: int
+    juz_summary: dict[int, list[JuzSummaryOut]] = {}

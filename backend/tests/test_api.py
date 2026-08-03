@@ -1,4 +1,5 @@
 import pytest
+from datetime import date, timedelta
 
 
 def login(client, username, password):
@@ -233,6 +234,135 @@ def test_admin_can_tick_any_session(client):
     )
     assert resp.status_code == 200
     assert resp.json()["completed"] is True
+
+
+# ---- ratings & feedback --------------------------------------------------
+
+
+def test_rating_rules(client):
+    login_admin(client)
+
+    student = create_student(client, "Rater").json()
+    yasin = surah_id_by_number(client, 36)
+    pending = create_session(client, student["id"], "new", yasin, 440, 441)
+    done = create_session(client, student["id"], "new", yasin, 442, 442)
+    client.patch(f"/api/sessions/{done.json()['id']}/complete", json={"completed": True})
+
+    # Incomplete sessions cannot be rated.
+    resp = client.patch(
+        f"/api/sessions/{pending.json()['id']}/rating",
+        json={"rating": 5, "feedback": "Great"},
+    )
+    assert resp.status_code == 400
+
+    # Rate the completed one.
+    resp = client.patch(
+        f"/api/sessions/{done.json()['id']}/rating",
+        json={"rating": 4, "feedback": "Good"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["rating"] == 4
+    assert body["feedback"] == "Good"
+    assert body["rated_by_name"] == "Admin"
+
+    # Stars must be 1..5.
+    assert client.patch(f"/api/sessions/{done.json()['id']}/rating", json={"rating": 0}).status_code == 422
+    assert client.patch(f"/api/sessions/{done.json()['id']}/rating", json={"rating": 6}).status_code == 422
+
+    # Overwrite and clear.
+    resp = client.patch(
+        f"/api/sessions/{done.json()['id']}/rating",
+        json={"rating": 5, "feedback": "Excellent"},
+    )
+    assert resp.json()["rating"] == 5
+    resp = client.patch(f"/api/sessions/{done.json()['id']}/rating", json={"rating": None})
+    assert resp.json()["rating"] is None
+    assert resp.json()["feedback"] == "Excellent"
+
+
+def test_rating_unknown_session_returns_404(client):
+    login_admin(client)
+    resp = client.patch("/api/sessions/9999/rating", json={"rating": 5})
+    assert resp.status_code == 404
+
+
+def test_student_cannot_rate(client):
+    login_admin(client)
+    student = create_student(client, "Rated").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 441)
+    client.patch(f"/api/sessions/{created.json()['id']}/complete", json={"completed": True})
+    client.post(
+        "/api/users",
+        json={"name": "Rated User", "username": "rated1", "password": "rated123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "rated1")
+    login(client, "rated1", "rated123")
+
+    resp = client.patch(f"/api/sessions/{created.json()['id']}/rating", json={"rating": 5})
+    assert resp.status_code == 403
+
+
+def test_juz_summary_avg_rating_and_duration(client):
+    login_admin(client)
+    student = create_student(client, "Summary").json()
+    yasin = surah_id_by_number(client, 36)
+    today = date.today()
+
+    s1 = create_session(
+        client, student["id"], "new", yasin, 440, 440,
+        date=(today - timedelta(days=10)).isoformat(),
+    )
+    s2 = create_session(
+        client, student["id"], "new", yasin, 441, 442, date=today.isoformat(),
+    )
+    client.patch(f"/api/sessions/{s1.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s2.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s1.json()['id']}/rating", json={"rating": 4})
+    client.patch(f"/api/sessions/{s2.json()['id']}/rating", json={"rating": 5})
+
+    stats = client.get("/api/stats").json()
+    summary = stats["juz_summary"][str(student["id"])]
+    assert len(summary) == 1
+    juz = summary[0]
+    assert juz["juz"] == 22
+    # 440-441 are in juz 22; 442 spills into juz 23 and is not double-counted.
+    assert juz["pages_memorised"] == 2
+    assert juz["total_pages"] == juz["page_to"] - juz["page_from"] + 1
+    assert juz["complete"] is False
+    assert juz["sessions"] == 2
+    assert juz["rated_sessions"] == 2
+    assert juz["avg_rating"] == 4.5
+    assert juz["duration_days"] == 10
+
+
+def test_student_sees_rating_and_juz_summary(client):
+    login_admin(client)
+    student = create_student(client, "Reader2").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 442)
+    client.patch(f"/api/sessions/{created.json()['id']}/complete", json={"completed": True})
+    client.patch(
+        f"/api/sessions/{created.json()['id']}/rating",
+        json={"rating": 5, "feedback": "Mashallah"},
+    )
+    client.post(
+        "/api/users",
+        json={"name": "Reader2", "username": "reader2", "password": "read1234", "role": "user"},
+    )
+    link_student_to_user(student["id"], "reader2")
+    login(client, "reader2", "read1234")
+
+    stats = client.get("/api/stats").json()
+    session = stats["recent_sessions"][0]
+    assert session["rating"] == 5
+    assert session["feedback"] == "Mashallah"
+    assert session["rated_by_name"] == "Admin"
+
+    summary = stats["juz_summary"][str(student["id"])]
+    assert len(summary) == 1
+    assert summary[0]["avg_rating"] == 5.0
 
 
 def test_pages_outside_valid_range_returns_400(client):

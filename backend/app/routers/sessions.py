@@ -105,6 +105,8 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
         item.logged_by_name = logged_by.name if logged_by else None
         item.assigned_by_name = assigned_by.name if assigned_by else None
         item.deadline = row.deadline
+        rated_by = db.get(models.User, row.rated_by_id) if row.rated_by_id else None
+        item.rated_by_name = rated_by.name if rated_by else None
         if surah is not None:
             jz_from, jz_to, rk_from, rk_to = page_range_meta(
                 row.from_page, row.to_page
@@ -166,6 +168,31 @@ def set_session_completed(
             )
     row.completed = payload.completed
     row.completed_at = utcnow() if payload.completed else None
+    db.commit()
+    db.refresh(row)
+    return _enrich(db, [row])[0]
+
+
+@router.patch("/{session_id}/rating", response_model=schemas.SessionDetail)
+def rate_session(
+    session_id: int,
+    payload: schemas.SessionRatingIn,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(require_admin),
+):
+    """Give 1-5 stars and/or written feedback for a completed session."""
+    row = db.get(models.Session, session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not row.completed:
+        raise HTTPException(
+            status_code=400, detail="Only completed sessions can be rated"
+        )
+    if "rating" in payload.model_fields_set:
+        row.rating = payload.rating
+    if "feedback" in payload.model_fields_set:
+        row.feedback = payload.feedback
+    row.rated_by_id = user.id
     db.commit()
     db.refresh(row)
     return _enrich(db, [row])[0]

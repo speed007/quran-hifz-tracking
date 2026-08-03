@@ -57,6 +57,22 @@ export interface SessionDetail {
   ruku_to: number | null;
   completed: boolean;
   completed_at: string | null;
+  rating: number | null;
+  feedback: string | null;
+  rated_by_name: string | null;
+}
+
+export interface JuzSummary {
+  juz: number;
+  page_from: number;
+  page_to: number;
+  pages_memorised: number;
+  total_pages: number;
+  complete: boolean;
+  sessions: number;
+  rated_sessions: number;
+  avg_rating: number | null;
+  duration_days: number | null;
 }
 
 export interface Stats {
@@ -65,6 +81,7 @@ export interface Stats {
   recent_sessions: SessionDetail[];
   today_activity: number;
   total_sessions: number;
+  juz_summary: Record<number, JuzSummary[]>;
 }
 
 export interface Settings {
@@ -158,6 +175,11 @@ export const api = {
     request<SessionDetail>(`/api/sessions/${id}/complete`, {
       method: "PATCH",
       body: JSON.stringify({ completed }),
+    }),
+  setSessionRating: (id: number, body: { rating?: number | null; feedback?: string | null }) =>
+    request<SessionDetail>(`/api/sessions/${id}/rating`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
     }),
 
   stats: () => request<Stats>("/api/stats"),

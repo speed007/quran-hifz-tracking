@@ -64,6 +64,17 @@ def migrate_db(db: SessionLocal) -> None:
     if "completed_at" not in columns:
         cursor.execute("ALTER TABLE sessions ADD COLUMN completed_at DATETIME")
         conn.commit()
+    if "rating" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN rating INTEGER")
+        conn.commit()
+    if "feedback" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN feedback TEXT")
+        conn.commit()
+    if "rated_by_id" not in columns:
+        cursor.execute(
+            "ALTER TABLE sessions ADD COLUMN rated_by_id INTEGER REFERENCES users(id)"
+        )
+        conn.commit()
 
 
 @asynccontextmanager

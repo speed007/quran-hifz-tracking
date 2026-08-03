@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..deps import get_current_user, get_db
 from ..routers.sessions import _enrich
-from ..services.progress import compute_progress
+from ..services.progress import compute_juz_summary, compute_progress
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -24,6 +24,9 @@ def stats(
 
     progress = {
         s.id: compute_progress(db, s.id) for s in students
+    }
+    juz_summary = {
+        s.id: compute_juz_summary(db, s.id) for s in students
     }
 
     q = db.query(models.Session)
@@ -47,4 +50,5 @@ def stats(
         recent_sessions=enriched,
         today_activity=today_activity,
         total_sessions=total_sessions,
+        juz_summary=juz_summary,
     )
