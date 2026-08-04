@@ -74,13 +74,15 @@ def stats(
         rated = _enrich(db, rated_rows)
 
     today = date.today()
-    today_activity = (
-        db.query(func.count(models.Session.id))
-        .filter(models.Session.date == today)
-        .scalar()
-        or 0
+    today_q = db.query(func.count(models.Session.id)).filter(
+        models.Session.date == today
     )
-    total_sessions = db.query(func.count(models.Session.id)).scalar() or 0
+    total_q = db.query(func.count(models.Session.id))
+    if user.role == "user":
+        today_q = today_q.filter(models.Session.student_id == user.student_id)
+        total_q = total_q.filter(models.Session.student_id == user.student_id)
+    today_activity = today_q.scalar() or 0
+    total_sessions = total_q.scalar() or 0
 
     return schemas.StatsOut(
         students=students,

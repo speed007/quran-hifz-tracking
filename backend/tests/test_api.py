@@ -345,6 +345,34 @@ def test_student_cannot_tick_someone_elses_session(client):
     assert resp.status_code == 403
 
 
+def test_student_stats_count_only_own_sessions(client):
+    login_admin(client)
+
+    own = create_student(client, "Counter").json()
+    other = create_student(client, "OtherCounter").json()
+    yasin = surah_id_by_number(client, 36)
+    for _ in range(3):
+        create_session(client, own["id"], "new", yasin, 440, 441)
+    for _ in range(5):
+        create_session(client, other["id"], "new", yasin, 440, 441)
+
+    admin_stats = client.get("/api/stats").json()
+    assert admin_stats["total_sessions"] == 8
+
+    client.post(
+        "/api/users",
+        json={"name": "Counter User", "username": "counter1", "password": "counter123", "role": "user"},
+    )
+    link_student_to_user(own["id"], "counter1")
+    login(client, "counter1", "counter123")
+
+    stats = client.get("/api/stats").json()
+    assert stats["total_sessions"] == 3
+    assert stats["today_activity"] == 3
+    assert len(stats["students"]) == 1
+    assert stats["students"][0]["id"] == own["id"]
+
+
 def test_admin_can_tick_any_session(client):
     login_admin(client)
 
