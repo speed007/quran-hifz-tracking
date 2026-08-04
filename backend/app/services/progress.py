@@ -4,7 +4,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..quran_meta import TOTAL_AYAHS, JUZ, page_of_ayah, page_range_meta
+from ..quran_meta import (
+    JUZ,
+    TOTAL_AYAHS,
+    page_of_ayah,
+    page_range_meta,
+    ruku_range,
+)
 
 
 def _juz_page_ranges() -> dict[int, tuple[int, int]]:
@@ -16,6 +22,57 @@ def _juz_page_ranges() -> dict[int, tuple[int, int]]:
         )
         for j in range(1, 31)
     }
+
+
+def covered_ayah_range(
+    row: models.Session,
+) -> tuple[int | None, int | None]:
+    """The (from, to) ayah range actually completed, 1-based within the juz.
+
+    For a partial session this is the reported partial range; otherwise it is
+    the full assigned range. Sessions without juz/ayah data return (None, None).
+    """
+    if row.juz is None:
+        return None, None
+    if (
+        row.completion == "partial"
+        and row.partial_from_ayah is not None
+        and row.partial_to_ayah is not None
+    ):
+        return row.partial_from_ayah, row.partial_to_ayah
+    if row.from_ayah is not None and row.to_ayah is not None:
+        return row.from_ayah, row.to_ayah
+    return None, None
+
+
+def covered_global_ayahs(row: models.Session) -> tuple[int, int] | None:
+    """Global mushaf ayah ids (start, end) actually completed, or None."""
+    if row.juz is None:
+        return None
+    af, at = covered_ayah_range(row)
+    if af is None:
+        return None
+    first = JUZ[row.juz]
+    return first + af - 1, first + at - 1
+
+
+def covered_page_range(row: models.Session) -> tuple[int, int]:
+    """The (from_page, to_page) actually completed."""
+    if row.juz is not None:
+        g = covered_global_ayahs(row)
+        if g is not None:
+            return page_of_ayah(g[0]), page_of_ayah(g[1])
+    return row.from_page, row.to_page
+
+
+def covered_ruku_range(row: models.Session) -> tuple[int, int]:
+    """The (ruku_from, ruku_to) actually completed."""
+    g = covered_global_ayahs(row)
+    if g is not None:
+        return ruku_range(g[0], g[1])
+    p_from, p_to = covered_page_range(row)
+    _jf, _jt, rk_f, rk_t = page_range_meta(p_from, p_to)
+    return rk_f, rk_t
 
 
 def compute_juz_summary(
@@ -62,8 +119,9 @@ def compute_juz_summary(
         for juz in range(jz_from, jz_to + 1):
             p_from, p_to = juz_pages[juz]
             covered = pages_by_juz.setdefault(juz, set())
+            c_from, c_to = covered_page_range(row)
             covered.update(
-                range(max(row.from_page, p_from), min(row.to_page, p_to) + 1)
+                range(max(c_from, p_from), min(c_to, p_to) + 1)
             )
         sessions_by_juz[jz_from] = sessions_by_juz.get(jz_from, 0) + 1
         if row.rating is not None:
@@ -118,10 +176,9 @@ def compute_progress(db: Session, student_id: int) -> schemas.ProgressOut:
     pages: set[int] = set()
     rukus: set[int] = set()
     for row in new_rows:
-        pages.update(range(row.from_page, row.to_page + 1))
-        jz_from, jz_to, rk_from, rk_to = page_range_meta(
-            row.from_page, row.to_page
-        )
+        c_from, c_to = covered_page_range(row)
+        pages.update(range(c_from, c_to + 1))
+        rk_from, rk_to = covered_ruku_range(row)
         rukus.update(range(rk_from, rk_to + 1))
 
     total = schemas.ProgressOut(

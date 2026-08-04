@@ -272,7 +272,12 @@ def set_session_completed(
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
-    """Mark a session as completed (student ticks their own; admins may tick any)."""
+    """Mark a session as completed, optionally partial.
+
+    Students complete their own sessions; admins may complete any. A partial
+    completion records the ayah range actually done (within the assigned
+    range) plus a mandatory note explaining the shortfall.
+    """
     row = db.get(models.Session, session_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -281,8 +286,58 @@ def set_session_completed(
             raise HTTPException(
                 status_code=403, detail="You can only complete your own sessions"
             )
-    row.completed = payload.completed
-    row.completed_at = utcnow() if payload.completed else None
+    if not payload.completed:
+        row.completed = False
+        row.completed_at = None
+        row.completion = None
+        row.partial_from_ayah = None
+        row.partial_to_ayah = None
+        row.partial_note = None
+    else:
+        completion = payload.completion or "full"
+        if completion == "partial":
+            if (
+                row.juz is None
+                or row.from_ayah is None
+                or row.to_ayah is None
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Partial completion requires a juz + ayah session",
+                )
+            note = (payload.partial_note or "").strip()
+            if not note:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A note explaining why the session was only partially completed is required",
+                )
+            if (
+                payload.partial_from_ayah is None
+                or payload.partial_to_ayah is None
+                or not (
+                    row.from_ayah
+                    <= payload.partial_from_ayah
+                    <= payload.partial_to_ayah
+                    <= row.to_ayah
+                )
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Partial range must be within the assigned ayahs "
+                        f"{row.from_ayah}–{row.to_ayah} (of this juz)"
+                    ),
+                )
+            row.partial_from_ayah = payload.partial_from_ayah
+            row.partial_to_ayah = payload.partial_to_ayah
+            row.partial_note = note
+        else:
+            row.partial_from_ayah = None
+            row.partial_to_ayah = None
+            row.partial_note = None
+        row.completion = completion
+        row.completed = True
+        row.completed_at = utcnow()
     db.commit()
     db.refresh(row)
     return _enrich(db, [row])[0]

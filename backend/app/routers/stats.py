@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..deps import get_current_user, get_db
 from ..routers.sessions import _enrich
-from ..services.progress import compute_juz_summary, compute_progress
+from ..services.progress import (
+    compute_juz_summary,
+    compute_progress,
+    covered_ayah_range,
+    covered_page_range,
+)
 from ..services.settings import get_settings_dict
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -168,12 +173,10 @@ def history(
     months: dict[str, dict] = {}
     stars: dict[str, dict] = {}
     for row in completed:
-        pages = row.to_page - row.from_page + 1
-        ayahs = (
-            row.to_ayah - row.from_ayah + 1
-            if row.from_ayah is not None and row.to_ayah is not None
-            else 0
-        )
+        c_from, c_to = covered_page_range(row)
+        pages = c_to - c_from + 1
+        af, at = covered_ayah_range(row)
+        ayahs = at - af + 1 if af is not None else 0
         if row.completed_at is not None:
             key = row.completed_at.strftime("%Y-%m")
             m = months.setdefault(
@@ -270,11 +273,20 @@ def history(
             avg_rating=(
                 round(total_stars / rated_sessions, 1) if rated_sessions else None
             ),
-            pages_memorised=sum(r.to_page - r.from_page + 1 for r in completed),
+            pages_memorised=sum(
+                (
+                    p_to - p_from + 1
+                    for p_from, p_to in (
+                        covered_page_range(r) for r in completed
+                    )
+                ),
+                start=0,
+            ),
             ayahs_memorised=sum(
-                (r.to_ayah - r.from_ayah + 1)
+                (at - af + 1)
                 for r in completed
-                if r.from_ayah is not None and r.to_ayah is not None
+                for af, at in (covered_ayah_range(r),)
+                if af is not None
             ),
             juzs_completed=sum(1 for j in by_juz if j.complete),
         ),

@@ -407,9 +407,21 @@ export default function HistoryPage({ user }: { user: User }) {
                             : `Ruku ${s.ruku_from}–${s.ruku_to}`
                           : "–"}
                       </td>
-                      <td>{s.rating ? stars(s.rating) : <span className="muted">–</span>}</td>
+                      <td>
+                        {s.rating ? stars(s.rating) : <span className="muted">–</span>}
+                      </td>
                       <td className="feedback-cell">
-                        {s.feedback || <span className="muted">No notes</span>}
+                        {s.completion === "partial" ? (
+                          <span className="partial-info">
+                            <strong>Partial</strong>
+                            {s.partial_from_ayah != null && s.partial_to_ayah != null
+                              ? ` (ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}): `
+                              : ": "}
+                            {s.partial_note}
+                          </span>
+                        ) : (
+                          s.feedback || <span className="muted">No notes</span>
+                        )}
                       </td>
                       {!isStudent && <td>{rateButton(s)}</td>}
                     </tr>

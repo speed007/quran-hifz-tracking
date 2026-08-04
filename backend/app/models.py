@@ -81,6 +81,10 @@ class Session(Base):
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completion: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    partial_from_ayah: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    partial_to_ayah: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    partial_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     rated_by_id: Mapped[int | None] = mapped_column(
@@ -103,6 +107,25 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, default="")
+
+
+class ScheduleEntry(Base):
+    __tablename__ = "schedule_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
+    label: Mapped[str] = mapped_column(String(128), default="Study")
+    # day_of_week (0=Monday..6=Sunday) marks a recurring weekly slot; `date`
+    # marks a one-off slot. Exactly one of the two is set.
+    day_of_week: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    start_time: Mapped[str] = mapped_column(String(5))
+    end_time: Mapped[str] = mapped_column(String(5))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    student: Mapped["Student"] = relationship()
 
 
 class AuthToken(Base):

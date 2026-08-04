@@ -60,6 +60,10 @@ export interface SessionDetail {
   ruku_to: number | null;
   completed: boolean;
   completed_at: string | null;
+  completion: string | null;
+  partial_from_ayah: number | null;
+  partial_to_ayah: number | null;
+  partial_note: string | null;
   rating: number | null;
   feedback: string | null;
   rated_by_name: string | null;
@@ -148,6 +152,27 @@ export interface History {
   by_juz: HistoryJuz[];
   by_stars: HistoryStars[];
   sessions: SessionDetail[];
+}
+
+export interface ScheduleEntry {
+  id: number;
+  student_id: number;
+  label: string;
+  day_of_week: number | null;
+  date: string | null;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  student_name: string | null;
+}
+
+export interface ScheduleEntryIn {
+  student_id?: number;
+  label?: string;
+  day_of_week?: number | null;
+  date?: string | null;
+  start_time: string;
+  end_time: string;
 }
 
 export interface SectionMeta {
@@ -272,10 +297,16 @@ export const api = {
     note?: string;
   }) => request<SessionDetail>("/api/sessions", { method: "POST", body: JSON.stringify(body) }),
   deleteSession: (id: number) => request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
-  setSessionCompleted: (id: number, completed: boolean) =>
+  setSessionCompleted: (id: number, body: {
+    completed: boolean;
+    completion?: "full" | "partial";
+    partial_from_ayah?: number;
+    partial_to_ayah?: number;
+    partial_note?: string;
+  }) =>
     request<SessionDetail>(`/api/sessions/${id}/complete`, {
       method: "PATCH",
-      body: JSON.stringify({ completed }),
+      body: JSON.stringify(body),
     }),
   setSessionRating: (id: number, body: { rating?: number | null; feedback?: string | null }) =>
     request<SessionDetail>(`/api/sessions/${id}/rating`, {
@@ -302,4 +333,17 @@ export const api = {
   settings: () => request<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) =>
     request<Settings>("/api/settings", { method: "PATCH", body: JSON.stringify(body) }),
+
+  schedule: (params: { student_id?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.student_id != null) q.set("student_id", String(params.student_id));
+    const qs = q.toString();
+    return request<ScheduleEntry[]>(qs ? `/api/schedule?${qs}` : "/api/schedule");
+  },
+  createSchedule: (body: ScheduleEntryIn) =>
+    request<ScheduleEntry>("/api/schedule", { method: "POST", body: JSON.stringify(body) }),
+  updateSchedule: (id: number, body: Partial<ScheduleEntryIn>) =>
+    request<ScheduleEntry>(`/api/schedule/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteSchedule: (id: number) =>
+    request<void>(`/api/schedule/${id}`, { method: "DELETE" }),
 };

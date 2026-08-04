@@ -10,7 +10,16 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import auth, sessions, settings, stats, students, surahs, users
+from .routers import (
+    auth,
+    schedule,
+    sessions,
+    settings,
+    stats,
+    students,
+    surahs,
+    users,
+)
 from .seed import seed_database
 from .services import mqtt as mqtt_service
 from .services.scheduler import scheduler
@@ -84,6 +93,21 @@ def migrate_db(db: SessionLocal) -> None:
     if "to_ayah" not in columns:
         cursor.execute("ALTER TABLE sessions ADD COLUMN to_ayah INTEGER")
         conn.commit()
+    if "completion" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN completion VARCHAR(16)")
+        conn.commit()
+        # Existing completed sessions were full completions.
+        cursor.execute("UPDATE sessions SET completion = 'full' WHERE completed = 1")
+        conn.commit()
+    if "partial_from_ayah" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN partial_from_ayah INTEGER")
+        conn.commit()
+    if "partial_to_ayah" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN partial_to_ayah INTEGER")
+        conn.commit()
+    if "partial_note" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN partial_note TEXT")
+        conn.commit()
 
 
 @asynccontextmanager
@@ -148,6 +172,7 @@ app.include_router(sessions.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(surahs.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(schedule.router, prefix="/api")
 
 
 @app.get("/api/health")

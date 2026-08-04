@@ -7,6 +7,10 @@ export default function Dashboard({ user }: { user: User }) {
   const [error, setError] = useState("");
   const [ticking, setTicking] = useState<number | null>(null);
   const [ratingFor, setRatingFor] = useState<number | null>(null);
+  const [partialFor, setPartialFor] = useState<number | null>(null);
+  const [partialFrom, setPartialFrom] = useState("");
+  const [partialTo, setPartialTo] = useState("");
+  const [partialNote, setPartialNote] = useState("");
 
   useEffect(() => {
     api
@@ -24,16 +28,53 @@ export default function Dashboard({ user }: { user: User }) {
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
 
-  async function toggleComplete(s: SessionDetail, completed: boolean) {
+  async function completeSession(
+    s: SessionDetail,
+    body: {
+      completed: boolean;
+      completion?: "full" | "partial";
+      partial_from_ayah?: number;
+      partial_to_ayah?: number;
+      partial_note?: string;
+    }
+  ) {
     setTicking(s.id);
     try {
-      await api.setSessionCompleted(s.id, completed);
+      await api.setSessionCompleted(s.id, body);
       setStats(await api.stats());
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setTicking(null);
     }
+  }
+
+  function openPartial(s: SessionDetail) {
+    setPartialFor(s.id);
+    setPartialFrom(String(s.from_ayah ?? 1));
+    setPartialTo(String(s.to_ayah ?? s.from_ayah ?? 1));
+    setPartialNote("");
+  }
+
+  async function submitPartial(s: SessionDetail) {
+    const from = Number(partialFrom);
+    const to = Number(partialTo);
+    if (!from || !to || from > to) {
+      setError("Select a valid partial ayah range.");
+      return;
+    }
+    if (!partialNote.trim()) {
+      setError("A note is required when completing partially.");
+      return;
+    }
+    await completeSession(s, {
+      completed: true,
+      completion: "partial",
+      partial_from_ayah: from,
+      partial_to_ayah: to,
+      partial_note: partialNote.trim(),
+    });
+    setPartialFor(null);
   }
 
   function openRatingEditor(s: SessionDetail) {
@@ -78,6 +119,31 @@ export default function Dashboard({ user }: { user: User }) {
         : `Juz ${s.juz_from}–${s.juz_to}`;
     }
     return "–";
+  }
+
+  function partialInfo(s: SessionDetail) {
+    if (s.completion !== "partial") return null;
+    return (
+      <p className="muted partial-info">
+        {s.partial_from_ayah != null && s.partial_to_ayah != null
+          ? `Did ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}. `
+          : "Partial. "}
+        {s.partial_note}
+      </p>
+    );
+  }
+
+  function partialAyahOptions(s: SessionDetail) {
+    if (s.from_ayah == null || s.to_ayah == null) return null;
+    const options = [];
+    for (let n = s.from_ayah; n <= s.to_ayah; n++) {
+      options.push(
+        <option key={n} value={n}>
+          Ayah {n}
+        </option>
+      );
+    }
+    return options;
   }
 
   return (
@@ -182,7 +248,10 @@ export default function Dashboard({ user }: { user: User }) {
                     <td>
                       {s.from_page}–{s.to_page}
                     </td>
-                    <td>{sectionLabel(s)}</td>
+                    <td>
+                      {sectionLabel(s)}
+                      {partialInfo(s)}
+                    </td>
                     <td>{rateButton(s)}</td>
                   </tr>
                   {ratingFor === s.id && (
@@ -263,16 +332,38 @@ export default function Dashboard({ user }: { user: User }) {
                 <tr className={`${overdue ? "overdue" : ""} ${s.completed ? "completed-row" : ""}`}>
                   <td>
                     {isStudent ? (
-                      <input
-                        type="checkbox"
-                        checked={!!s.completed}
-                        disabled={ticking === s.id}
-                        aria-label={`Mark ${s.surah_name_en ?? "session"} ${s.completed ? "as pending" : "as completed"}`}
-                        onChange={(e) => toggleComplete(s, e.target.checked)}
-                      />
+                      s.completed ? (
+                        <span className={s.completion === "partial" ? "pending-badge" : "done-badge"}>
+                          {s.completion === "partial" ? "Partial" : "✓ Full"}
+                        </span>
+                      ) : (
+                        <select
+                          className="completion-select"
+                          value=""
+                          disabled={ticking === s.id}
+                          aria-label={`Mark ${s.surah_name_en ?? "session"} as completed`}
+                          onChange={(e) => {
+                            if (e.target.value === "full") {
+                              completeSession(s, { completed: true, completion: "full" });
+                            } else if (e.target.value === "partial") {
+                              openPartial(s);
+                            }
+                          }}
+                        >
+                          <option value="">Mark…</option>
+                          <option value="full">Full</option>
+                          <option value="partial" disabled={s.juz == null}>
+                            Partial
+                          </option>
+                        </select>
+                      )
                     ) : (
                       <span className={s.completed ? "done-badge" : "pending-badge"}>
-                        {s.completed ? "✓ Done" : "Pending"}
+                        {s.completed
+                          ? s.completion === "partial"
+                            ? "Partial"
+                            : "✓ Done"
+                          : "Pending"}
                       </span>
                     )}
                   </td>
@@ -288,7 +379,7 @@ export default function Dashboard({ user }: { user: User }) {
                       ? `${s.deadline}${overdue ? " ⚠️" : ""}`
                       : "–"}
                   </td>
-                  <td>{sectionLabel(s)}</td>
+                  <td>{sectionLabel(s)}{partialInfo(s)}</td>
                   <td>
                     {s.ruku_from != null && s.ruku_to != null
                       ? s.ruku_from === s.ruku_to
@@ -317,6 +408,63 @@ export default function Dashboard({ user }: { user: User }) {
                         onSave={(r, f) => saveRating(s.id, r, f)}
                         onCancel={() => setRatingFor(null)}
                       />
+                    </td>
+                  </tr>
+                )}
+                {isStudent && partialFor === s.id && (
+                  <tr key={`partial-${s.id}`} className="rating-editor-row">
+                    <td colSpan={11}>
+                      <div className="rating-editor">
+                        <p className="muted">
+                          You were assigned Juz {s.juz} ayahs {s.from_ayah}–
+                          {s.to_ayah}. Select the ayahs you actually did and
+                          explain why you couldn't finish the whole session.
+                        </p>
+                        <div className="row">
+                          <label>
+                            From ayah
+                            <select
+                              value={partialFrom}
+                              onChange={(e) => setPartialFrom(e.target.value)}
+                            >
+                              {partialAyahOptions(s)}
+                            </select>
+                          </label>
+                          <label>
+                            To ayah
+                            <select
+                              value={partialTo}
+                              onChange={(e) => setPartialTo(e.target.value)}
+                            >
+                              {partialAyahOptions(s)}
+                            </select>
+                          </label>
+                        </div>
+                        <label>
+                          Why didn't you finish the whole session? (required)
+                          <textarea
+                            value={partialNote}
+                            onChange={(e) => setPartialNote(e.target.value)}
+                          />
+                        </label>
+                        {error && <p className="error">{error}</p>}
+                        <div className="editor-actions row">
+                          <button
+                            type="button"
+                            onClick={() => submitPartial(s)}
+                            disabled={!partialNote.trim() || ticking === s.id}
+                          >
+                            Save partial
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => setPartialFor(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 )}

@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import HistoryPage from "./pages/History";
 import LogSession from "./pages/LogSession";
+import SchedulePage from "./pages/Schedule";
 import Students from "./pages/Students";
 import SettingsPage from "./pages/Settings";
 import Users from "./pages/Users";
@@ -54,6 +55,7 @@ export default function App() {
         <span className="brand">Qur'an Hifz</span>
         <NavLink to="/">Dashboard</NavLink>
         <NavLink to="/history">History</NavLink>
+        <NavLink to="/schedule">Schedule</NavLink>
         {user.role !== "user" && <NavLink to="/log">Log session</NavLink>}
         {user.role !== "user" && <NavLink to="/students">Students</NavLink>}
         {user.role !== "user" && <NavLink to="/settings">Settings</NavLink>}
@@ -88,6 +90,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard user={user} />} />
           <Route path="/history" element={<HistoryPage user={user} />} />
+          <Route path="/schedule" element={<SchedulePage user={user} />} />
           {user.role !== "user" && <Route path="/log" element={<LogSession user={user} />} />}
           {user.role !== "user" && <Route path="/students" element={<Students user={user} />} />}
           {user.role !== "user" && <Route path="/settings" element={<SettingsPage user={user} />} />}

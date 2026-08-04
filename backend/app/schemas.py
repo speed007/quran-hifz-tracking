@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SessionKind = Literal["new", "revision"]
+CompletionKind = Literal["full", "partial"]
 Role = Literal["creator", "admin", "user"]
 CreatableRole = Literal["admin", "user"]
 
@@ -99,12 +100,20 @@ class SessionOut(BaseModel):
     created_at: datetime
     completed: bool = False
     completed_at: datetime | None = None
+    completion: str | None = None
+    partial_from_ayah: int | None = None
+    partial_to_ayah: int | None = None
+    partial_note: str | None = None
     rating: int | None = None
     feedback: str | None = None
 
 
 class SessionCompleteIn(BaseModel):
     completed: bool
+    completion: CompletionKind | None = None
+    partial_from_ayah: int | None = Field(default=None, ge=1)
+    partial_to_ayah: int | None = Field(default=None, ge=1)
+    partial_note: str | None = Field(default=None, max_length=1000)
 
 
 class SessionRatingIn(BaseModel):
@@ -274,3 +283,34 @@ class HistoryOut(BaseModel):
     by_juz: list[HistoryJuzOut]
     by_stars: list[HistoryStarsOut] = []
     sessions: list[SessionDetail] = []
+
+
+class ScheduleEntryIn(BaseModel):
+    student_id: int | None = None
+    label: str | None = Field(default=None, max_length=128)
+    day_of_week: int | None = Field(default=None, ge=0, le=6)
+    date: date_type | None = None
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+
+class ScheduleEntryUpdate(BaseModel):
+    label: str | None = Field(default=None, max_length=128)
+    day_of_week: int | None = None
+    date: date_type | None = None
+    start_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+    end_time: str | None = Field(default=None, pattern=r"^\d{2}:\d{2}$")
+
+
+class ScheduleEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: int
+    label: str
+    day_of_week: int | None = None
+    date: date_type | None = None
+    start_time: str
+    end_time: str
+    created_at: datetime
+    student_name: str | None = None

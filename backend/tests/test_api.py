@@ -40,6 +40,18 @@ def create_session(client, student_id, kind, surah_id, from_page, to_page, **ext
     return client.post("/api/sessions", json=payload)
 
 
+def create_juz_session(client, student_id, juz, from_ayah, to_ayah, **extra):
+    payload = {
+        "student_id": student_id,
+        "kind": "new",
+        "juz": juz,
+        "from_ayah": from_ayah,
+        "to_ayah": to_ayah,
+    }
+    payload.update(extra)
+    return client.post("/api/sessions", json=payload)
+
+
 def test_health_returns_ok(client):
     resp = client.get("/api/health")
     assert resp.status_code == 200
@@ -836,6 +848,272 @@ def test_history_drill_down_filters(client):
     assert client.get(
         f"/api/stats/history?student_id={student['id']}&from_month=2026/03"
     ).status_code == 400
+
+
+def test_partial_completion_validation(client):
+    login_admin(client)
+    student = create_student(client, "Partial").json()
+    created = create_juz_session(client, student["id"], 1, 1, 10)
+    sid = created.json()["id"]
+
+    no_note = client.patch(
+        f"/api/sessions/{sid}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 1,
+            "partial_to_ayah": 8,
+        },
+    )
+    assert no_note.status_code == 400
+
+    no_range = client.patch(
+        f"/api/sessions/{sid}/complete",
+        json={"completed": True, "completion": "partial", "partial_note": "Ran out of time"},
+    )
+    assert no_range.status_code == 400
+
+    bad_range = client.patch(
+        f"/api/sessions/{sid}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 9,
+            "partial_to_ayah": 11,
+            "partial_note": "Ran out of time",
+        },
+    )
+    assert bad_range.status_code == 400
+
+    partial = client.patch(
+        f"/api/sessions/{sid}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 1,
+            "partial_to_ayah": 8,
+            "partial_note": "Could not finish the last two",
+        },
+    )
+    assert partial.status_code == 200
+    body = partial.json()
+    assert body["completed"] is True
+    assert body["completion"] == "partial"
+    assert body["partial_from_ayah"] == 1
+    assert body["partial_to_ayah"] == 8
+    assert body["partial_note"] == "Could not finish the last two"
+
+    full = client.patch(
+        f"/api/sessions/{sid}/complete",
+        json={"completed": True, "completion": "full"},
+    )
+    assert full.status_code == 200
+    body = full.json()
+    assert body["completion"] == "full"
+    assert body["partial_from_ayah"] is None
+    assert body["partial_to_ayah"] is None
+    assert body["partial_note"] is None
+
+    reverted = client.patch(f"/api/sessions/{sid}/complete", json={"completed": False})
+    assert reverted.status_code == 200
+    body = reverted.json()
+    assert body["completed"] is False
+    assert body["completion"] is None
+    assert body["completed_at"] is None
+
+
+def test_partial_rejected_for_page_sessions(client):
+    login_admin(client)
+    student = create_student(client, "OldSchool").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 442)
+    resp = client.patch(
+        f"/api/sessions/{created.json()['id']}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 1,
+            "partial_to_ayah": 2,
+            "partial_note": "Ran out of time",
+        },
+    )
+    assert resp.status_code == 400
+    assert "juz + ayah" in resp.json()["detail"]
+
+
+def test_partial_counts_only_done_ayahs(client):
+    login_admin(client)
+    student = create_student(client, "PartialCounter").json()
+    s1 = create_juz_session(client, student["id"], 1, 1, 10)
+    s2 = create_juz_session(client, student["id"], 2, 1, 10)
+    client.patch(
+        f"/api/sessions/{s1.json()['id']}/complete",
+        json={"completed": True, "completion": "full"},
+    )
+    client.patch(
+        f"/api/sessions/{s2.json()['id']}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 1,
+            "partial_to_ayah": 8,
+            "partial_note": "Only did eight",
+        },
+    )
+
+    stats = client.get("/api/stats").json()
+    progress = stats["progress"][str(student["id"])]
+
+    history = client.get(f"/api/stats/history?student_id={student['id']}").json()
+    summary = history["summary"]
+    assert summary["ayahs_memorised"] == 18
+    assert summary["completed_sessions"] == 2
+    assert len(history["sessions"]) == 2
+    partial_row = next(s for s in history["sessions"] if s["juz"] == 2)
+    assert partial_row["completion"] == "partial"
+    assert partial_row["partial_note"] == "Only did eight"
+    assert partial_row["partial_to_ayah"] == 8
+
+    full_row = next(s for s in history["sessions"] if s["juz"] == 1)
+    assert full_row["completion"] == "full"
+
+    # Partial credits strictly fewer pages than doing the whole assignment.
+    client.patch(
+        f"/api/sessions/{s2.json()['id']}/complete",
+        json={"completed": True, "completion": "full"},
+    )
+    full_progress = client.get("/api/stats").json()["progress"][str(student["id"])]
+    assert progress["memorised_pages"] < full_progress["memorised_pages"]
+
+    juz2 = next(j for j in client.get("/api/stats").json()["juz_summary"][str(student["id"])] if j["juz"] == 2)
+    assert juz2["sessions"] == 1
+    assert juz2["complete"] is False
+
+
+def test_student_marks_own_session_partial(client):
+    login_admin(client)
+    student = create_student(client, "SelfPartial").json()
+    other = create_student(client, "Other").json()
+    created = create_juz_session(client, student["id"], 1, 1, 5)
+    other_session = create_juz_session(client, other["id"], 1, 1, 5)
+    client.post(
+        "/api/users",
+        json={"name": "Self", "username": "self1", "password": "self123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "self1")
+    login(client, "self1", "self123")
+
+    resp = client.patch(
+        f"/api/sessions/{created.json()['id']}/complete",
+        json={
+            "completed": True,
+            "completion": "partial",
+            "partial_from_ayah": 1,
+            "partial_to_ayah": 3,
+            "partial_note": "Family visit cut it short",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["completion"] == "partial"
+
+    denied = client.patch(
+        f"/api/sessions/{other_session.json()['id']}/complete",
+        json={"completed": True, "completion": "full"},
+    )
+    assert denied.status_code == 403
+
+
+def test_schedule_crud_and_access(client):
+    login_admin(client)
+    student = create_student(client, "Planner").json()
+
+    bad_both = client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "day_of_week": 0,
+            "date": "2026-08-10",
+            "start_time": "18:00",
+            "end_time": "19:00",
+        },
+    )
+    assert bad_both.status_code == 400
+
+    bad_times = client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "day_of_week": 1,
+            "start_time": "19:00",
+            "end_time": "18:00",
+        },
+    )
+    assert bad_times.status_code == 400
+
+    recurring = client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "label": "Memorisation",
+            "day_of_week": 0,
+            "start_time": "18:00",
+            "end_time": "19:00",
+        },
+    )
+    assert recurring.status_code == 201
+    body = recurring.json()
+    assert body["label"] == "Memorisation"
+    assert body["day_of_week"] == 0
+    assert body["student_name"] == "Planner"
+
+    one_off = client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "date": "2026-08-10",
+            "start_time": "09:00",
+            "end_time": "09:30",
+        },
+    )
+    assert one_off.status_code == 201
+
+    listing = client.get(f"/api/schedule?student_id={student['id']}")
+    assert listing.status_code == 200
+    assert len(listing.json()) == 2
+
+    updated = client.patch(
+        f"/api/schedule/{body['id']}",
+        json={"start_time": "17:30", "end_time": "18:30"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["start_time"] == "17:30"
+
+    other = create_student(client, "OtherSched").json()
+
+    # Students see only their own schedule and cannot manage others'.
+    client.post(
+        "/api/users",
+        json={"name": "Self", "username": "self2", "password": "self123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "self2")
+    login(client, "self2", "self123")
+    assert len(client.get("/api/schedule").json()) == 2
+    assert client.get("/api/schedule?student_id=9999").status_code == 200
+
+    denied = client.post(
+        "/api/schedule",
+        json={"student_id": other["id"], "day_of_week": 2, "start_time": "10:00", "end_time": "11:00"},
+    )
+    assert denied.status_code == 403
+
+    # A student can update and delete their own entry.
+    deleted = client.delete(f"/api/schedule/{one_off.json()['id']}")
+    assert deleted.status_code == 204
+    assert len(client.get("/api/schedule").json()) == 1
+
+
+def test_schedule_requires_auth(client):
+    assert client.get("/api/schedule").status_code == 401
 
 
 def test_link_code_returns_8_chars(client):
