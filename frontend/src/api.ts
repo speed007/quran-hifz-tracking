@@ -135,10 +135,19 @@ export interface HistorySummary {
   juzs_completed: number;
 }
 
+export interface HistoryStars {
+  rating: number | null;
+  sessions: number;
+  pages: number;
+  ayahs: number;
+}
+
 export interface History {
   summary: HistorySummary;
   by_month: HistoryMonth[];
   by_juz: HistoryJuz[];
+  by_stars: HistoryStars[];
+  sessions: SessionDetail[];
 }
 
 export interface SectionMeta {
@@ -275,12 +284,20 @@ export const api = {
     }),
 
   stats: () => request<Stats>("/api/stats"),
-  history: (studentId?: number) =>
-    request<History>(
-      studentId != null
-        ? `/api/stats/history?student_id=${studentId}`
-        : "/api/stats/history"
-    ),
+  history: (params: {
+    student_id?: number;
+    kind?: "new" | "revision";
+    from_month?: string;
+    to_month?: string;
+  } = {}) => {
+    const q = new URLSearchParams();
+    if (params.student_id != null) q.set("student_id", String(params.student_id));
+    if (params.kind) q.set("kind", params.kind);
+    if (params.from_month) q.set("from_month", params.from_month);
+    if (params.to_month) q.set("to_month", params.to_month);
+    const qs = q.toString();
+    return request<History>(qs ? `/api/stats/history?${qs}` : "/api/stats/history");
+  },
 
   settings: () => request<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) =>

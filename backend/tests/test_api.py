@@ -784,6 +784,60 @@ def test_history_requires_student_and_valid_student(client):
     assert client.get("/api/stats/history?student_id=9999").status_code == 404
 
 
+def test_history_drill_down_filters(client):
+    login_admin(client)
+    student = create_student(client, "Driller").json()
+    yasin = surah_id_by_number(client, 36)
+
+    s1 = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 1,
+            "from_ayah": 1,
+            "to_ayah": 7,
+            "date": "2026-02-01",
+        },
+    )
+    s2 = create_session(client, student["id"], "new", yasin, 6, 8, date="2026-03-01")
+    s3 = create_session(client, student["id"], "revision", yasin, 1, 5, date="2026-03-02")
+    for s in (s1, s2, s3):
+        client.patch(f"/api/sessions/{s.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s1.json()['id']}/rating", json={"rating": 4})
+    client.patch(f"/api/sessions/{s2.json()['id']}/rating", json={"rating": 5})
+    set_completed_at(s1.json()["id"], datetime(2026, 2, 15, 12, 0))
+    set_completed_at(s2.json()["id"], datetime(2026, 3, 10, 12, 0))
+    set_completed_at(s3.json()["id"], datetime(2026, 3, 20, 12, 0))
+
+    base = client.get(f"/api/stats/history?student_id={student['id']}").json()
+    assert [s["rating"] for s in base["by_stars"]] == [5, 4, None]
+    assert [s["sessions"] for s in base["by_stars"]] == [1, 1, 1]
+    assert len(base["sessions"]) == 3
+    assert base["sessions"][0]["student_name"] == "Driller"
+
+    revision = client.get(
+        f"/api/stats/history?student_id={student['id']}&kind=revision"
+    ).json()
+    assert [m["month"] for m in revision["by_month"]] == ["2026-03"]
+    assert len(revision["sessions"]) == 1
+    assert revision["sessions"][0]["id"] == s3.json()["id"]
+    assert revision["by_stars"][0]["rating"] is None
+    assert revision["summary"]["total_sessions"] == 1
+
+    month_filter = client.get(
+        f"/api/stats/history?student_id={student['id']}&from_month=2026-03"
+    ).json()
+    assert [m["month"] for m in month_filter["by_month"]] == ["2026-03"]
+    assert sorted(s["id"] for s in month_filter["sessions"]) == sorted(
+        [s2.json()["id"], s3.json()["id"]]
+    )
+
+    assert client.get(
+        f"/api/stats/history?student_id={student['id']}&from_month=2026/03"
+    ).status_code == 400
+
+
 def test_link_code_returns_8_chars(client):
     login_admin(client)
 

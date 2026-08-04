@@ -245,6 +245,13 @@ class HistoryJuzOut(BaseModel):
     duration_days: int | None = None
 
 
+class HistoryStarsOut(BaseModel):
+    rating: int | None = None
+    sessions: int
+    pages: int
+    ayahs: int
+
+
 class HistorySummaryOut(BaseModel):
     student_id: int
     student_name: str
@@ -265,3 +272,5 @@ class HistoryOut(BaseModel):
     summary: HistorySummaryOut
     by_month: list[HistoryMonthOut]
     by_juz: list[HistoryJuzOut]
+    by_stars: list[HistoryStarsOut] = []
+    sessions: list[SessionDetail] = []

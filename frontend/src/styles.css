@@ -283,6 +283,73 @@ input[type="checkbox"]:disabled {
   padding: 0.1rem 0.4rem;
 }
 
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.filters input,
+.filters select {
+  width: auto;
+  min-width: 150px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.segmented button {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+tr.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover td {
+  background: var(--row-hover);
+}
+
+tr.selected td {
+  background: var(--row-hover);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+tr.selected.clickable:hover td {
+  background: var(--row-hover);
+}
+
+
 .feedback-cell {
   max-width: 260px;
 }

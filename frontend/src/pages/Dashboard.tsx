@@ -1,13 +1,12 @@
 import { Fragment, useEffect, useState } from "react";
 import { api, SessionDetail, Stats, User } from "../api";
+import RatingEditor from "../components/RatingEditor";
 
 export default function Dashboard({ user }: { user: User }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
   const [ticking, setTicking] = useState<number | null>(null);
   const [ratingFor, setRatingFor] = useState<number | null>(null);
-  const [draftRating, setDraftRating] = useState(0);
-  const [draftFeedback, setDraftFeedback] = useState("");
 
   useEffect(() => {
     api
@@ -38,18 +37,12 @@ export default function Dashboard({ user }: { user: User }) {
   }
 
   function openRatingEditor(s: SessionDetail) {
-    setDraftRating(s.rating ?? 0);
-    setDraftFeedback(s.feedback ?? "");
     setRatingFor(s.id);
   }
 
-  async function saveRating() {
-    if (ratingFor == null) return;
+  async function saveRating(id: number, rating: number | null, feedback: string | null) {
     try {
-      await api.setSessionRating(ratingFor, {
-        rating: draftRating > 0 ? draftRating : null,
-        feedback: draftFeedback.trim() ? draftFeedback.trim() : null,
-      });
+      await api.setSessionRating(id, { rating, feedback });
       setStats(await api.stats());
       setRatingFor(null);
     } catch (e) {
@@ -59,6 +52,19 @@ export default function Dashboard({ user }: { user: User }) {
 
   function stars(rating: number) {
     return <span className="stars-inline" title={`${rating}/5`}>{"★".repeat(rating)}</span>;
+  }
+
+  function rateButton(s: SessionDetail) {
+    return (
+      <button
+        type="button"
+        className="rate-btn"
+        onClick={() => openRatingEditor(s)}
+        title={s.rating != null ? "Edit stars and notes" : "Give stars and notes"}
+      >
+        {s.rating != null ? "★ Edit" : "★ Rate"}
+      </button>
+    );
   }
 
   function sectionLabel(s: SessionDetail): string {
@@ -72,38 +78,6 @@ export default function Dashboard({ user }: { user: User }) {
         : `Juz ${s.juz_from}–${s.juz_to}`;
     }
     return "–";
-  }
-
-  function renderRatingEditor() {
-    return (
-      <div className="rating-editor">
-        <div className="stars" role="radiogroup" aria-label="Star rating">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={`star ${n <= draftRating ? "on" : ""}`}
-              aria-label={`${n} star${n > 1 ? "s" : ""}`}
-              onClick={() => setDraftRating(draftRating === n ? 0 : n)}
-            >
-              ★
-            </button>
-          ))}
-        </div>
-        <textarea
-          value={draftFeedback}
-          maxLength={1000}
-          placeholder="Feedback for the student…"
-          onChange={(e) => setDraftFeedback(e.target.value)}
-        />
-        <div className="row editor-actions">
-          <button onClick={saveRating}>Save</button>
-          <button className="secondary" onClick={() => setRatingFor(null)}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -209,15 +183,18 @@ export default function Dashboard({ user }: { user: User }) {
                       {s.from_page}–{s.to_page}
                     </td>
                     <td>{sectionLabel(s)}</td>
-                    <td>
-                      <button className="link-button rate-btn" onClick={() => openRatingEditor(s)}>
-                        Rate
-                      </button>
-                    </td>
+                    <td>{rateButton(s)}</td>
                   </tr>
                   {ratingFor === s.id && (
                     <tr className="rating-editor-row">
-                      <td colSpan={6}>{renderRatingEditor()}</td>
+                      <td colSpan={6}>
+                        <RatingEditor
+                          rating={s.rating}
+                          feedback={s.feedback}
+                          onSave={(r, f) => saveRating(s.id, r, f)}
+                          onCancel={() => setRatingFor(null)}
+                        />
+                      </td>
                     </tr>
                   )}
                 </Fragment>
@@ -324,11 +301,7 @@ export default function Dashboard({ user }: { user: User }) {
                     {s.completed ? (
                       <div className="rate-cell">
                         {s.rating ? stars(s.rating) : <span className="muted">–</span>}
-                        {!isStudent && (
-                          <button className="link-button rate-btn" onClick={() => openRatingEditor(s)}>
-                            {s.rating != null ? "Edit" : "Rate"}
-                          </button>
-                        )}
+                        {!isStudent && rateButton(s)}
                       </div>
                     ) : (
                       <span className="muted">waiting</span>
@@ -337,7 +310,14 @@ export default function Dashboard({ user }: { user: User }) {
                 </tr>
                 {!isStudent && ratingFor === s.id && (
                   <tr key={`rating-${s.id}`} className="rating-editor-row">
-                    <td colSpan={11}>{renderRatingEditor()}</td>
+                    <td colSpan={11}>
+                      <RatingEditor
+                        rating={s.rating}
+                        feedback={s.feedback}
+                        onSave={(r, f) => saveRating(s.id, r, f)}
+                        onCancel={() => setRatingFor(null)}
+                      />
+                    </td>
                   </tr>
                 )}
               </Fragment>

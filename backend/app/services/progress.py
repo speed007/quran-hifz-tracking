@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import datetime
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -19,21 +19,31 @@ def _juz_page_ranges() -> dict[int, tuple[int, int]]:
 
 
 def compute_juz_summary(
-    db: Session, student_id: int, since: date | None = None
+    db: Session,
+    student_id: int,
+    *,
+    kind: str | None = None,
+    completed_from: datetime | None = None,
+    completed_to: datetime | None = None,
 ) -> list[schemas.JuzSummaryOut]:
     """Per-juz stats from completed sessions: average stars, days taken, pages.
 
     A session is attributed to the juz it starts in (for ratings, duration and
     session count), but its pages count toward every juz it covers.
 
-    `since` restricts to sessions completed on or after that date (season view).
+    `kind` restricts to a session type; `completed_from`/`completed_to`
+    restrict to completion times (season / drill-down filters).
     """
     q = db.query(models.Session).filter(
         models.Session.student_id == student_id,
         models.Session.completed == True,  # noqa: E712
     )
-    if since is not None:
-        q = q.filter(models.Session.completed_at >= datetime.combine(since, time.min))
+    if kind is not None:
+        q = q.filter(models.Session.kind == kind)
+    if completed_from is not None:
+        q = q.filter(models.Session.completed_at >= completed_from)
+    if completed_to is not None:
+        q = q.filter(models.Session.completed_at < completed_to)
     rows = q.all()
     juz_pages = _juz_page_ranges()
     pages_by_juz: dict[int, set[int]] = {}

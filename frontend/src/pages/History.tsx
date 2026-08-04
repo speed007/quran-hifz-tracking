@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
-import { api, History, Student, User } from "../api";
+import { Fragment, useEffect, useState } from "react";
+import { api, History, SessionDetail, Student, User } from "../api";
+import RatingEditor from "../components/RatingEditor";
+
+type Breakdown = "month" | "juz" | "stars";
 
 function monthLabel(month: string) {
   const [year, m] = month.split("-").map(Number);
@@ -13,12 +16,31 @@ function stars(rating: number) {
   return <span className="stars-inline" title={`${rating}/5`}>{"★".repeat(Math.round(rating))}</span>;
 }
 
+function sectionLabel(s: SessionDetail): string {
+  if (s.juz != null && s.from_ayah != null) {
+    const to = s.to_ayah != null && s.to_ayah !== s.from_ayah ? `–${s.to_ayah}` : "";
+    return `Juz ${s.juz} · ayah ${s.from_ayah}${to}`;
+  }
+  if (s.juz_from != null && s.juz_to != null) {
+    return s.juz_from === s.juz_to
+      ? `Juz ${s.juz_from}`
+      : `Juz ${s.juz_from}–${s.juz_to}`;
+  }
+  return "–";
+}
+
 export default function HistoryPage({ user }: { user: User }) {
   const isStudent = user.role === "user";
   const [students, setStudents] = useState<Student[]>([]);
   const [studentId, setStudentId] = useState<number | null>(
     isStudent ? (user.student_id ?? null) : null
   );
+  const [kind, setKind] = useState<"" | "new" | "revision">("");
+  const [fromMonth, setFromMonth] = useState("");
+  const [toMonth, setToMonth] = useState("");
+  const [breakdown, setBreakdown] = useState<Breakdown>("month");
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [ratingFor, setRatingFor] = useState<number | null>(null);
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
 
@@ -36,32 +58,133 @@ export default function HistoryPage({ user }: { user: User }) {
       setData(null);
       return;
     }
-    api.history(isStudent ? undefined : studentId)
+    setSelectedGroup(null);
+    api.history({
+      student_id: isStudent ? undefined : studentId,
+      kind: kind || undefined,
+      from_month: fromMonth || undefined,
+      to_month: toMonth || undefined,
+    })
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, [isStudent, studentId]);
+  }, [isStudent, studentId, kind, fromMonth, toMonth]);
 
   if (error) return <div className="card error">{error}</div>;
+
+  function groupKey(s: SessionDetail): string {
+    switch (breakdown) {
+      case "juz":
+        return `j:${s.juz ?? s.juz_from ?? ""}`;
+      case "stars":
+        return `s:${s.rating ?? "unrated"}`;
+      default:
+        return `m:${(s.completed_at ?? s.date).slice(0, 7)}`;
+    }
+  }
+
+  const visibleSessions = selectedGroup
+    ? (data?.sessions ?? []).filter((s) => groupKey(s) === selectedGroup)
+    : data?.sessions ?? [];
+
+  function groupLabel(): string {
+    if (!selectedGroup) return "All sessions";
+    switch (breakdown) {
+      case "juz":
+        return `Sessions in Juz ${selectedGroup.slice(2)}`;
+      case "stars":
+        return selectedGroup === "s:unrated"
+          ? "Sessions not yet rated"
+          : `Sessions rated ${selectedGroup.slice(2)}★`;
+      default:
+        return `Sessions in ${monthLabel(selectedGroup.slice(2))}`;
+    }
+  }
+
+  async function saveRating(id: number, rating: number | null, feedback: string | null) {
+    try {
+      await api.setSessionRating(id, { rating, feedback });
+      setData(await api.history({
+        student_id: isStudent ? undefined : studentId ?? undefined,
+        kind: kind || undefined,
+        from_month: fromMonth || undefined,
+        to_month: toMonth || undefined,
+      }));
+      setRatingFor(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function rateButton(s: SessionDetail) {
+    if (isStudent) return null;
+    return (
+      <button
+        type="button"
+        className="rate-btn"
+        onClick={() => setRatingFor(s.id)}
+        title={s.rating != null ? "Edit stars and notes" : "Give stars and notes"}
+      >
+        {s.rating != null ? "★ Edit" : "★ Rate"}
+      </button>
+    );
+  }
 
   return (
     <div>
       <h1>History</h1>
-      {!isStudent && (
+
+      <div className="card filters">
+        {!isStudent && (
+          <label>
+            Student
+            <select
+              value={studentId ?? ""}
+              onChange={(e) => setStudentId(Number(e.target.value))}
+            >
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
-          Student
-          <select
-            value={studentId ?? ""}
-            onChange={(e) => setStudentId(Number(e.target.value))}
-          >
-            {students.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+          Type
+          <select value={kind} onChange={(e) => setKind(e.target.value as "" | "new" | "revision")}>
+            <option value="">All</option>
+            <option value="new">Memorised</option>
+            <option value="revision">Revision</option>
           </select>
         </label>
-      )}
+        <label>
+          From month
+          <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
+        </label>
+        <label>
+          To month
+          <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
+        </label>
+      </div>
+
+      <div className="segmented" role="tablist" aria-label="Break down by">
+        {(["month", "juz", "stars"] as Breakdown[]).map((b) => (
+          <button
+            key={b}
+            type="button"
+            className={breakdown === b ? "active" : ""}
+            onClick={() => {
+              setBreakdown(b);
+              setSelectedGroup(null);
+            }}
+          >
+            {b === "month" ? "By month" : b === "juz" ? "By juz" : "By stars"}
+          </button>
+        ))}
+      </div>
+
       {!data && !error && <div className="center">Loading…</div>}
+
       {data && (
         <>
           {data.summary.season_start && (
@@ -102,101 +225,210 @@ export default function HistoryPage({ user }: { user: User }) {
             </div>
           </div>
 
-          {data.by_month.length > 0 && (
-            <>
-              <h2>Stars &amp; progress per month</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    <th>Sessions</th>
-                    <th>Pages</th>
-                    <th>Ayahs</th>
-                    <th>Stars</th>
-                    <th>Average</th>
+          {breakdown === "month" && data.by_month.length > 0 && (
+            <h2>By month — click a row to drill down</h2>
+          )}
+          {breakdown === "month" && data.by_month.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Sessions</th>
+                  <th>Pages</th>
+                  <th>Ayahs</th>
+                  <th>Stars</th>
+                  <th>Average</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_month.map((m) => (
+                  <tr
+                    key={m.month}
+                    className={`clickable ${selectedGroup === `m:${m.month}` ? "selected" : ""}`}
+                    onClick={() =>
+                      setSelectedGroup(selectedGroup === `m:${m.month}` ? null : `m:${m.month}`)
+                    }
+                  >
+                    <td>{monthLabel(m.month)}</td>
+                    <td>{m.sessions}</td>
+                    <td>{m.pages}</td>
+                    <td>{m.ayahs}</td>
+                    <td>{m.stars}</td>
+                    <td>
+                      {m.avg_rating != null ? (
+                        <>
+                          {stars(m.avg_rating)} {m.avg_rating}/5
+                        </>
+                      ) : (
+                        <span className="muted">–</span>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.by_month.map((m) => (
-                    <tr key={m.month}>
-                      <td>{monthLabel(m.month)}</td>
-                      <td>{m.sessions}</td>
-                      <td>{m.pages}</td>
-                      <td>{m.ayahs}</td>
-                      <td>{m.stars}</td>
-                      <td>
-                        {m.avg_rating != null ? (
-                          <>
-                            {stars(m.avg_rating)} {m.avg_rating}/5
-                          </>
-                        ) : (
-                          <span className="muted">–</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
+                ))}
+              </tbody>
+            </table>
           )}
 
-          {data.by_juz.length > 0 && (
-            <>
-              <h2>Per juz</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Juz</th>
-                    <th>Pages</th>
-                    <th>Progress</th>
-                    <th>Sessions</th>
-                    <th>Rated</th>
-                    <th>Avg stars</th>
-                    <th>Time to complete</th>
+          {breakdown === "juz" && data.by_juz.length > 0 && (
+            <h2>By juz — click a row to drill down</h2>
+          )}
+          {breakdown === "juz" && data.by_juz.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Juz</th>
+                  <th>Pages</th>
+                  <th>Progress</th>
+                  <th>Sessions</th>
+                  <th>Rated</th>
+                  <th>Avg stars</th>
+                  <th>Time to complete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_juz.map((j) => (
+                  <tr
+                    key={j.juz}
+                    className={`clickable ${selectedGroup === `j:${j.juz}` ? "selected" : ""}`}
+                    onClick={() =>
+                      setSelectedGroup(selectedGroup === `j:${j.juz}` ? null : `j:${j.juz}`)
+                    }
+                  >
+                    <td>
+                      Juz {j.juz} {j.complete ? "✓" : ""}
+                    </td>
+                    <td>
+                      {j.pages_memorised} of {j.total_pages}
+                    </td>
+                    <td>
+                      <div className="bar">
+                        <div
+                          className="bar-fill"
+                          style={{ width: `${Math.min(j.percent, 100)}%` }}
+                        />
+                      </div>
+                    </td>
+                    <td>{j.sessions}</td>
+                    <td>{j.rated_sessions}</td>
+                    <td>
+                      {j.avg_rating != null ? (
+                        <>
+                          {stars(j.avg_rating)} {j.avg_rating}/5
+                        </>
+                      ) : (
+                        <span className="muted">–</span>
+                      )}
+                    </td>
+                    <td>
+                      {j.duration_days != null
+                        ? `${j.duration_days} day${j.duration_days === 1 ? "" : "s"}`
+                        : <span className="muted">–</span>}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.by_juz.map((j) => (
-                    <tr key={j.juz}>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {breakdown === "stars" && data.by_stars.length > 0 && (
+            <h2>By stars — click a row to drill down</h2>
+          )}
+          {breakdown === "stars" && data.by_stars.length > 0 && (
+            <table>
+              <thead>
+                <tr>
+                  <th>Stars</th>
+                  <th>Sessions</th>
+                  <th>Pages</th>
+                  <th>Ayahs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.by_stars.map((b) => {
+                  const key = b.rating != null ? `s:${b.rating}` : "s:unrated";
+                  return (
+                    <tr
+                      key={key}
+                      className={`clickable ${selectedGroup === key ? "selected" : ""}`}
+                      onClick={() => setSelectedGroup(selectedGroup === key ? null : key)}
+                    >
                       <td>
-                        Juz {j.juz} {j.complete ? "✓" : ""}
+                        {b.rating != null ? stars(b.rating) : <span className="muted">Not rated</span>}
                       </td>
+                      <td>{b.sessions}</td>
+                      <td>{b.pages}</td>
+                      <td>{b.ayahs}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {breakdown === "month" && data.by_month.length === 0 && (
+            <div className="card muted">No sessions match these filters.</div>
+          )}
+          {breakdown === "juz" && data.by_juz.length === 0 && (
+            <div className="card muted">No sessions match these filters.</div>
+          )}
+          {breakdown === "stars" && data.by_stars.length === 0 && (
+            <div className="card muted">No sessions match these filters.</div>
+          )}
+
+          <h2>{groupLabel()}</h2>
+          {visibleSessions.length === 0 ? (
+            <div className="card muted">No sessions to show.</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  {!isStudent && <th>Student</th>}
+                  <th>Type</th>
+                  <th>Section</th>
+                  <th>Ruku</th>
+                  <th>Stars</th>
+                  <th>Notes</th>
+                  {!isStudent && <th>Rate</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleSessions.map((s) => (
+                  <Fragment key={s.id}>
+                    <tr>
+                      <td>{s.completed_at ? s.completed_at.slice(0, 10) : s.date}</td>
+                      {!isStudent && <td>{s.student_name}</td>}
+                      <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
+                      <td>{sectionLabel(s)}</td>
                       <td>
-                        {j.pages_memorised} of {j.total_pages}
+                        {s.ruku_from != null && s.ruku_to != null
+                          ? s.ruku_from === s.ruku_to
+                            ? `Ruku ${s.ruku_from}`
+                            : `Ruku ${s.ruku_from}–${s.ruku_to}`
+                          : "–"}
                       </td>
-                      <td>
-                        <div className="bar">
-                          <div
-                            className="bar-fill"
-                            style={{ width: `${Math.min(j.percent, 100)}%` }}
+                      <td>{s.rating ? stars(s.rating) : <span className="muted">–</span>}</td>
+                      <td className="feedback-cell">
+                        {s.feedback || <span className="muted">No notes</span>}
+                      </td>
+                      {!isStudent && <td>{rateButton(s)}</td>}
+                    </tr>
+                    {!isStudent && ratingFor === s.id && (
+                      <tr className="rating-editor-row">
+                        <td colSpan={8}>
+                          <RatingEditor
+                            rating={s.rating}
+                            feedback={s.feedback}
+                            onSave={(r, f) => saveRating(s.id, r, f)}
+                            onCancel={() => setRatingFor(null)}
                           />
-                        </div>
-                      </td>
-                      <td>{j.sessions}</td>
-                      <td>{j.rated_sessions}</td>
-                      <td>
-                        {j.avg_rating != null ? (
-                          <>
-                            {stars(j.avg_rating)} {j.avg_rating}/5
-                          </>
-                        ) : (
-                          <span className="muted">–</span>
-                        )}
-                      </td>
-                      <td>
-                        {j.duration_days != null
-                          ? `${j.duration_days} day${j.duration_days === 1 ? "" : "s"}`
-                          : <span className="muted">–</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-
-          {data.by_month.length === 0 && data.by_juz.length === 0 && (
-            <div className="card muted">No completed sessions yet.</div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
           )}
         </>
       )}

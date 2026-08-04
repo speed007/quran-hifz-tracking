@@ -93,6 +93,9 @@ def stats(
 @router.get("/history", response_model=schemas.HistoryOut)
 def history(
     student_id: int | None = Query(default=None),
+    kind: schemas.SessionKind | None = None,
+    from_month: str | None = None,
+    to_month: str | None = None,
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
@@ -100,7 +103,9 @@ def history(
 
     Sessions count toward the month in which they were completed
     (`completed_at`). The season starts at the `season_start` setting, or at
-    the student's first session if the setting is unset.
+    the student's first session if the setting is unset. `kind`, `from_month`
+    and `to_month` narrow the view, and `sessions` lists the matching
+    individual sessions for drill-down.
     """
     if user.role == "user":
         if user.student_id is None:
@@ -112,6 +117,10 @@ def history(
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
 
+    for month in (from_month, to_month):
+        if month is not None and not _is_month(month):
+            raise HTTPException(status_code=400, detail="months must be YYYY-MM")
+
     setting_start = get_settings_dict(db).season_start
     earliest = (
         db.query(func.min(models.Session.date))
@@ -120,39 +129,68 @@ def history(
     )
     season_start = setting_start or earliest
 
+    completed_from = None
+    if season_start is not None:
+        completed_from = datetime.combine(season_start, time.min)
+    completed_to = None
+    if from_month is not None:
+        start, _end = _month_bounds(from_month)
+        completed_from = max(completed_from, start) if completed_from else start
+    if to_month is not None:
+        _start, end = _month_bounds(to_month)
+        completed_to = end
+
     all_q = db.query(models.Session).filter(
         models.Session.student_id == student_id
     )
     if season_start is not None:
         all_q = all_q.filter(models.Session.date >= season_start)
+    if kind is not None:
+        all_q = all_q.filter(models.Session.kind == kind)
+    if completed_from is not None:
+        all_q = all_q.filter(models.Session.date >= completed_from.date())
+    if completed_to is not None:
+        all_q = all_q.filter(models.Session.date < completed_to.date())
     total_sessions = all_q.count()
 
     completed_q = db.query(models.Session).filter(
         models.Session.student_id == student_id,
         models.Session.completed == True,  # noqa: E712
     )
-    if season_start is not None:
-        completed_q = completed_q.filter(
-            models.Session.completed_at >= datetime.combine(season_start, time.min)
-        )
+    if kind is not None:
+        completed_q = completed_q.filter(models.Session.kind == kind)
+    if completed_from is not None:
+        completed_q = completed_q.filter(models.Session.completed_at >= completed_from)
+    if completed_to is not None:
+        completed_q = completed_q.filter(models.Session.completed_at < completed_to)
     completed = completed_q.all()
 
     months: dict[str, dict] = {}
+    stars: dict[str, dict] = {}
     for row in completed:
-        if row.completed_at is None:
-            continue
-        key = row.completed_at.strftime("%Y-%m")
-        m = months.setdefault(
-            key,
-            {"sessions": 0, "pages": 0, "ayahs": 0, "rated": 0, "stars": 0},
+        pages = row.to_page - row.from_page + 1
+        ayahs = (
+            row.to_ayah - row.from_ayah + 1
+            if row.from_ayah is not None and row.to_ayah is not None
+            else 0
         )
-        m["sessions"] += 1
-        m["pages"] += row.to_page - row.from_page + 1
-        if row.from_ayah is not None and row.to_ayah is not None:
-            m["ayahs"] += row.to_ayah - row.from_ayah + 1
-        if row.rating is not None:
-            m["rated"] += 1
-            m["stars"] += row.rating
+        if row.completed_at is not None:
+            key = row.completed_at.strftime("%Y-%m")
+            m = months.setdefault(
+                key,
+                {"sessions": 0, "pages": 0, "ayahs": 0, "rated": 0, "stars": 0},
+            )
+            m["sessions"] += 1
+            m["pages"] += pages
+            m["ayahs"] += ayahs
+            if row.rating is not None:
+                m["rated"] += 1
+                m["stars"] += row.rating
+        skey = str(row.rating) if row.rating is not None else "unrated"
+        s = stars.setdefault(skey, {"rating": row.rating, "sessions": 0, "pages": 0, "ayahs": 0})
+        s["sessions"] += 1
+        s["pages"] += pages
+        s["ayahs"] += ayahs
 
     by_month = []
     for key in sorted(months):
@@ -170,9 +208,27 @@ def history(
             )
         )
 
+    by_stars = [
+        schemas.HistoryStarsOut(
+            rating=stars[k]["rating"],
+            sessions=stars[k]["sessions"],
+            pages=stars[k]["pages"],
+            ayahs=stars[k]["ayahs"],
+        )
+        for k in sorted(
+            stars, key=lambda k: (stars[k]["rating"] is None, - (stars[k]["rating"] or 0))
+        )
+    ]
+
     rated_sessions = sum(1 for r in completed if r.rating is not None)
     total_stars = sum(r.rating or 0 for r in completed)
-    juz_rows = compute_juz_summary(db, student_id, since=season_start)
+    juz_rows = compute_juz_summary(
+        db,
+        student_id,
+        kind=kind,
+        completed_from=completed_from,
+        completed_to=completed_to,
+    )
     by_juz = [
         schemas.HistoryJuzOut(
             juz=j.juz,
@@ -224,4 +280,22 @@ def history(
         ),
         by_month=by_month,
         by_juz=by_juz,
+        by_stars=by_stars,
+        sessions=_enrich(db, completed),
     )
+
+
+def _is_month(value: str) -> bool:
+    try:
+        datetime.strptime(value, "%Y-%m")
+        return True
+    except ValueError:
+        return False
+
+
+def _month_bounds(month: str) -> tuple[datetime, datetime]:
+    """Return (start, end-exclusive) datetimes for a YYYY-MM month."""
+    year, mon = int(month[:4]), int(month[5:7])
+    start = datetime(year, mon, 1)
+    end = datetime(year + 1, 1, 1) if mon == 12 else datetime(year, mon + 1, 1)
+    return start, end
