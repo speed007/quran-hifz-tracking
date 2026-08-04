@@ -61,6 +61,51 @@ export default function Dashboard({ user }: { user: User }) {
     return <span className="stars-inline" title={`${rating}/5`}>{"★".repeat(rating)}</span>;
   }
 
+  function sectionLabel(s: SessionDetail): string {
+    if (s.juz != null && s.from_ayah != null) {
+      const to = s.to_ayah != null && s.to_ayah !== s.from_ayah ? `–${s.to_ayah}` : "";
+      return `Juz ${s.juz} · ayah ${s.from_ayah}${to}`;
+    }
+    if (s.juz_from != null && s.juz_to != null) {
+      return s.juz_from === s.juz_to
+        ? `Juz ${s.juz_from}`
+        : `Juz ${s.juz_from}–${s.juz_to}`;
+    }
+    return "–";
+  }
+
+  function renderRatingEditor() {
+    return (
+      <div className="rating-editor">
+        <div className="stars" role="radiogroup" aria-label="Star rating">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`star ${n <= draftRating ? "on" : ""}`}
+              aria-label={`${n} star${n > 1 ? "s" : ""}`}
+              onClick={() => setDraftRating(draftRating === n ? 0 : n)}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={draftFeedback}
+          maxLength={1000}
+          placeholder="Feedback for the student…"
+          onChange={(e) => setDraftFeedback(e.target.value)}
+        />
+        <div className="row editor-actions">
+          <button onClick={saveRating}>Save</button>
+          <button className="secondary" onClick={() => setRatingFor(null)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1>Welcome, {user.name}</h1>
@@ -139,6 +184,83 @@ export default function Dashboard({ user }: { user: User }) {
         </>
       )}
 
+      {!isStudent && stats.rateable_sessions.length > 0 && (
+        <>
+          <h2>Ready to rate</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Student</th>
+                <th>Surah</th>
+                <th>Pages</th>
+                <th>Juz</th>
+                <th>Rating</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.rateable_sessions.map((s) => (
+                <Fragment key={s.id}>
+                  <tr>
+                    <td>{s.date}</td>
+                    <td>{s.student_name}</td>
+                    <td>{s.surah_name_en}</td>
+                    <td>
+                      {s.from_page}–{s.to_page}
+                    </td>
+                    <td>{sectionLabel(s)}</td>
+                    <td>
+                      <button className="link-button rate-btn" onClick={() => openRatingEditor(s)}>
+                        Rate
+                      </button>
+                    </td>
+                  </tr>
+                  {ratingFor === s.id && (
+                    <tr className="rating-editor-row">
+                      <td colSpan={6}>{renderRatingEditor()}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {isStudent && stats.rated_sessions.length > 0 && (
+        <>
+          <h2>Ratings &amp; notes</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Section</th>
+                <th>Surah</th>
+                <th>Pages</th>
+                <th>Stars</th>
+                <th>Notes from your tutor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stats.rated_sessions.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.date}</td>
+                  <td>{sectionLabel(s)}</td>
+                  <td>{s.surah_name_en}</td>
+                  <td>
+                    {s.from_page}–{s.to_page}
+                  </td>
+                  <td>{s.rating ? stars(s.rating) : <span className="muted">–</span>}</td>
+                  <td className="feedback-cell">
+                    {s.feedback || <span className="muted">No notes</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
       <h2>Recent sessions</h2>
       <table>
         <thead>
@@ -153,14 +275,7 @@ export default function Dashboard({ user }: { user: User }) {
             <th>Juz</th>
             <th>Ruku</th>
             <th className="hide-mobile">Logged by</th>
-            {isStudent ? (
-              <>
-                <th>Stars</th>
-                <th>Feedback</th>
-              </>
-            ) : (
-              <th>Rating</th>
-            )}
+            <th>Rating</th>
           </tr>
         </thead>
         <tbody>
@@ -196,13 +311,7 @@ export default function Dashboard({ user }: { user: User }) {
                       ? `${s.deadline}${overdue ? " ⚠️" : ""}`
                       : "–"}
                   </td>
-                  <td>
-                    {s.juz_from != null && s.juz_to != null
-                      ? s.juz_from === s.juz_to
-                        ? `Juz ${s.juz_from}`
-                        : `Juz ${s.juz_from}–${s.juz_to}`
-                      : "–"}
-                  </td>
+                  <td>{sectionLabel(s)}</td>
                   <td>
                     {s.ruku_from != null && s.ruku_to != null
                       ? s.ruku_from === s.ruku_to
@@ -211,57 +320,24 @@ export default function Dashboard({ user }: { user: User }) {
                       : "–"}
                   </td>
                   <td className="hide-mobile">{s.logged_by_name}</td>
-                  {isStudent ? (
-                    <>
-                      <td>{s.rating ? stars(s.rating) : <span className="muted">–</span>}</td>
-                      <td className="feedback-cell">{s.feedback || <span className="muted">–</span>}</td>
-                    </>
-                  ) : (
-                    <td>
-                      {s.completed ? (
-                        <div className="rate-cell">
-                          {s.rating ? stars(s.rating) : <span className="muted">–</span>}
+                  <td>
+                    {s.completed ? (
+                      <div className="rate-cell">
+                        {s.rating ? stars(s.rating) : <span className="muted">–</span>}
+                        {!isStudent && (
                           <button className="link-button rate-btn" onClick={() => openRatingEditor(s)}>
                             {s.rating != null ? "Edit" : "Rate"}
                           </button>
-                        </div>
-                      ) : (
-                        <span className="muted">waiting</span>
-                      )}
-                    </td>
-                  )}
+                        )}
+                      </div>
+                    ) : (
+                      <span className="muted">waiting</span>
+                    )}
+                  </td>
                 </tr>
                 {!isStudent && ratingFor === s.id && (
                   <tr key={`rating-${s.id}`} className="rating-editor-row">
-                    <td colSpan={11}>
-                      <div className="rating-editor">
-                        <div className="stars" role="radiogroup" aria-label="Star rating">
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <button
-                              key={n}
-                              type="button"
-                              className={`star ${n <= draftRating ? "on" : ""}`}
-                              aria-label={`${n} star${n > 1 ? "s" : ""}`}
-                              onClick={() => setDraftRating(draftRating === n ? 0 : n)}
-                            >
-                              ★
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          value={draftFeedback}
-                          maxLength={1000}
-                          placeholder="Feedback for the student…"
-                          onChange={(e) => setDraftFeedback(e.target.value)}
-                        />
-                        <div className="row editor-actions">
-                          <button onClick={saveRating}>Save</button>
-                          <button className="secondary" onClick={() => setRatingFor(null)}>
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </td>
+                    <td colSpan={11}>{renderRatingEditor()}</td>
                   </tr>
                 )}
               </Fragment>
@@ -269,7 +345,7 @@ export default function Dashboard({ user }: { user: User }) {
           })}
           {displaySessions.length === 0 && (
             <tr>
-              <td colSpan={isStudent ? 12 : 11} className="muted">
+              <td colSpan={11} className="muted">
                 No sessions yet.
               </td>
             </tr>

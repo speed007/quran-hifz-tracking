@@ -6,19 +6,30 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..deps import get_current_user, get_db, require_admin
-from ..quran_meta import page_range_meta, page_of_ayah, page_to_surah_number, rukus_in_juz, ruku_page_range
+from ..quran_meta import (
+    SURAH_START_AYAH,
+    juz_ayah_range,
+    page_of_ayah,
+    page_range_meta,
+    page_to_surah_number,
+    ruku_range,
+    rukus_in_juz,
+    ruku_page_range,
+    surah_of_ayah,
+    surahs_in_range,
+)
 from ..security import utcnow
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-def validate_session_pages(db: Session, payload: schemas.SessionCreate) -> None:
-    if payload.from_page < 1 or payload.to_page > 604:
+def validate_session_pages(from_page: int, to_page: int) -> None:
+    if from_page < 1 or to_page > 604:
         raise HTTPException(
             status_code=400,
             detail="Pages must be between 1 and 604",
         )
-    if payload.from_page > payload.to_page:
+    if from_page > to_page:
         raise HTTPException(status_code=400, detail="from_page must be <= to_page")
 
 
@@ -47,6 +58,84 @@ def ruku_pages_endpoint(
         "surah_number": surah_number,
         "surah_name_en": surah.name_en if surah else None,
     }
+
+
+@router.get("/juz-ayahs", response_model=schemas.JuzAyahListOut)
+def juz_ayahs(
+    juz: int = Query(ge=1, le=30),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    """List every ayah of a juz, numbered from 1 within the juz.
+
+    Students use a 16-line mushaf whose page numbers differ from the app's
+    604-page reference, but juz boundaries and ayah numbers match any mushaf.
+    """
+    first, last = juz_ayah_range(juz)
+    surahs_by_number = {s.number: s for s in db.query(models.Surah).all()}
+    ayahs = []
+    for global_ayah in range(first, last + 1):
+        surah_number = surah_of_ayah(global_ayah)
+        surah = surahs_by_number.get(surah_number)
+        ayahs.append(
+            schemas.JuzAyahOut(
+                local=global_ayah - first + 1,
+                surah_number=surah_number,
+                surah_name_ar=surah.name_ar if surah else None,
+                surah_name_en=surah.name_en if surah else None,
+                ayah=global_ayah - SURAH_START_AYAH[surah_number] + 1,
+            )
+        )
+    return schemas.JuzAyahListOut(
+        juz=juz, from_ayah=1, to_ayah=len(ayahs), ayahs=ayahs
+    )
+
+
+@router.get("/ayah-meta", response_model=schemas.AyahMetaOut)
+def ayah_meta(
+    juz: int = Query(ge=1, le=30),
+    from_ayah: int = Query(ge=1),
+    to_ayah: int = Query(ge=1),
+    db: Session = Depends(get_db),
+    _: models.User = Depends(get_current_user),
+):
+    """Resolve an ayah range within a juz into the 604-page reference.
+
+    The surah, ruku and page info is derived (reference only) so sessions can
+    be logged purely by "juz + ayah".
+    """
+    first, last = juz_ayah_range(juz)
+    if to_ayah > last - first + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Juz {juz} has only {last - first + 1} ayahs",
+        )
+    if from_ayah > to_ayah:
+        raise HTTPException(status_code=400, detail="from_ayah must be <= to_ayah")
+    from_page = page_of_ayah(first + from_ayah - 1)
+    to_page = page_of_ayah(first + to_ayah - 1)
+    rk_from, rk_to = ruku_range(first + from_ayah - 1, first + to_ayah - 1)
+    surahs_by_number = {s.number: s for s in db.query(models.Surah).all()}
+    surahs = [
+        schemas.SurahRefOut(
+            number=n,
+            name_ar=surahs_by_number[n].name_ar,
+            name_en=surahs_by_number[n].name_en,
+        )
+        for n in surahs_in_range(first + from_ayah - 1, first + to_ayah - 1)
+    ]
+    return schemas.AyahMetaOut(
+        juz=juz,
+        from_ayah=from_ayah,
+        to_ayah=to_ayah,
+        from_page=from_page,
+        to_page=to_page,
+        juz_from=juz,
+        juz_to=juz,
+        ruku_from=rk_from,
+        ruku_to=rk_to,
+        surahs=surahs,
+    )
 
 
 @router.get("/section-meta", response_model=schemas.SectionMetaOut)
@@ -107,7 +196,13 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
         item.deadline = row.deadline
         rated_by = db.get(models.User, row.rated_by_id) if row.rated_by_id else None
         item.rated_by_name = rated_by.name if rated_by else None
-        if surah is not None:
+        if row.juz is not None and row.from_ayah is not None and row.to_ayah is not None:
+            first, _last = juz_ayah_range(row.juz)
+            item.juz_from, item.juz_to = row.juz, row.juz
+            item.ruku_from, item.ruku_to = ruku_range(
+                first + row.from_ayah - 1, first + row.to_ayah - 1
+            )
+        elif surah is not None:
             jz_from, jz_to, rk_from, rk_to = page_range_meta(
                 row.from_page, row.to_page
             )
@@ -125,8 +220,25 @@ def create_session(
 ):
     if db.get(models.Student, payload.student_id) is None:
         raise HTTPException(status_code=400, detail="Unknown student")
-    validate_session_pages(db, payload)
-    surah_number = page_to_surah_number(payload.from_page)
+    if payload.juz is not None:
+        if payload.from_ayah is None or payload.to_ayah is None:
+            raise HTTPException(
+                status_code=400, detail="juz requires from_ayah and to_ayah"
+            )
+        first, last = juz_ayah_range(payload.juz)
+        if not (1 <= payload.from_ayah <= payload.to_ayah <= last - first + 1):
+            raise HTTPException(status_code=400, detail="Invalid ayah range for this juz")
+        from_page = page_of_ayah(first + payload.from_ayah - 1)
+        to_page = page_of_ayah(first + payload.to_ayah - 1)
+        surah_number = surah_of_ayah(first + payload.from_ayah - 1)
+    else:
+        if payload.from_page is None or payload.to_page is None:
+            raise HTTPException(
+                status_code=400, detail="from_page and to_page are required"
+            )
+        from_page, to_page = payload.from_page, payload.to_page
+        surah_number = page_to_surah_number(from_page)
+    validate_session_pages(from_page, to_page)
     surah = (
         db.query(models.Surah).filter(models.Surah.number == surah_number).first()
     )
@@ -136,8 +248,11 @@ def create_session(
         student_id=payload.student_id,
         kind=payload.kind,
         surah_id=surah.id,
-        from_page=payload.from_page,
-        to_page=payload.to_page,
+        from_page=from_page,
+        to_page=to_page,
+        juz=payload.juz,
+        from_ayah=payload.from_ayah,
+        to_ayah=payload.to_ayah,
         date=payload.date or date.today(),
         deadline=payload.deadline,
         note=payload.note,

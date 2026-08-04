@@ -41,6 +41,9 @@ export interface SessionDetail {
   surah_id: number;
   from_page: number;
   to_page: number;
+  juz: number | null;
+  from_ayah: number | null;
+  to_ayah: number | null;
   date: string;
   deadline: string | null;
   note: string | null;
@@ -82,6 +85,8 @@ export interface Stats {
   today_activity: number;
   total_sessions: number;
   juz_summary: Record<number, JuzSummary[]>;
+  rateable_sessions: SessionDetail[];
+  rated_sessions: SessionDetail[];
 }
 
 export interface Settings {
@@ -90,6 +95,50 @@ export interface Settings {
   alexa_weekday_time: string;
   alexa_weekend_time: string;
   revision_lookback_pages: number;
+  season_start: string | null;
+}
+
+export interface HistoryMonth {
+  month: string;
+  sessions: number;
+  pages: number;
+  ayahs: number;
+  stars: number;
+  avg_rating: number | null;
+}
+
+export interface HistoryJuz {
+  juz: number;
+  pages_memorised: number;
+  total_pages: number;
+  percent: number;
+  complete: boolean;
+  sessions: number;
+  rated_sessions: number;
+  avg_rating: number | null;
+  duration_days: number | null;
+}
+
+export interface HistorySummary {
+  student_id: number;
+  student_name: string;
+  season_start: string | null;
+  first_session: string | null;
+  last_session: string | null;
+  total_sessions: number;
+  completed_sessions: number;
+  rated_sessions: number;
+  total_stars: number;
+  avg_rating: number | null;
+  pages_memorised: number;
+  ayahs_memorised: number;
+  juzs_completed: number;
+}
+
+export interface History {
+  summary: HistorySummary;
+  by_month: HistoryMonth[];
+  by_juz: HistoryJuz[];
 }
 
 export interface SectionMeta {
@@ -97,6 +146,40 @@ export interface SectionMeta {
   juz_to: number;
   ruku_from: number;
   ruku_to: number;
+}
+
+export interface JuzAyah {
+  local: number;
+  surah_number: number;
+  surah_name_ar: string | null;
+  surah_name_en: string | null;
+  ayah: number;
+}
+
+export interface JuzAyahList {
+  juz: number;
+  from_ayah: number;
+  to_ayah: number;
+  ayahs: JuzAyah[];
+}
+
+export interface SurahRef {
+  number: number;
+  name_ar: string;
+  name_en: string;
+}
+
+export interface AyahMeta {
+  juz: number;
+  from_ayah: number;
+  to_ayah: number;
+  from_page: number;
+  to_page: number;
+  juz_from: number;
+  juz_to: number;
+  ruku_from: number;
+  ruku_to: number;
+  surahs: SurahRef[];
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -150,6 +233,12 @@ export const api = {
     request<SectionMeta>(
       `/api/sessions/section-meta?surah_id=${surahId}&from_page=${fromPage}&to_page=${toPage}`
     ),
+  juzAyahs: (juz: number) =>
+    request<JuzAyahList>(`/api/sessions/juz-ayahs?juz=${juz}`),
+  ayahMeta: (juz: number, fromAyah: number, toAyah: number) =>
+    request<AyahMeta>(
+      `/api/sessions/ayah-meta?juz=${juz}&from_ayah=${fromAyah}&to_ayah=${toAyah}`
+    ),
   rukusInJuz: (juz: number) =>
     request<{ first_ruku: number; last_ruku: number; rukus: number[] }>(
       `/api/sessions/rukus-in-juz?juz=${juz}`
@@ -164,8 +253,11 @@ export const api = {
   createSession: (body: {
     student_id: number;
     kind: "new" | "revision";
-    from_page: number;
-    to_page: number;
+    from_page?: number;
+    to_page?: number;
+    juz?: number;
+    from_ayah?: number;
+    to_ayah?: number;
     deadline?: string;
     date?: string;
     note?: string;
@@ -183,6 +275,12 @@ export const api = {
     }),
 
   stats: () => request<Stats>("/api/stats"),
+  history: (studentId?: number) =>
+    request<History>(
+      studentId != null
+        ? `/api/stats/history?student_id=${studentId}`
+        : "/api/stats/history"
+    ),
 
   settings: () => request<Settings>("/api/settings"),
   updateSettings: (body: Partial<Settings>) =>

@@ -71,8 +71,11 @@ class StudentOut(BaseModel):
 class SessionCreate(BaseModel):
     student_id: int
     kind: SessionKind = "new"
-    from_page: int
-    to_page: int
+    from_page: int | None = None
+    to_page: int | None = None
+    juz: int | None = Field(default=None, ge=1, le=30)
+    from_ayah: int | None = Field(default=None, ge=1)
+    to_ayah: int | None = Field(default=None, ge=1)
     date: date_type | None = None
     deadline: date_type | None = None
     note: str | None = None
@@ -87,6 +90,9 @@ class SessionOut(BaseModel):
     surah_id: int
     from_page: int
     to_page: int
+    juz: int | None = None
+    from_ayah: int | None = None
+    to_ayah: int | None = None
     date: date_type
     note: str | None = None
     logged_by_id: int | None = None
@@ -120,6 +126,40 @@ class SessionDetail(SessionOut):
     rated_by_name: str | None = None
 
 
+class SurahRefOut(BaseModel):
+    number: int
+    name_ar: str
+    name_en: str
+
+
+class JuzAyahOut(BaseModel):
+    local: int
+    surah_number: int
+    surah_name_ar: str | None = None
+    surah_name_en: str | None = None
+    ayah: int
+
+
+class JuzAyahListOut(BaseModel):
+    juz: int
+    from_ayah: int
+    to_ayah: int
+    ayahs: list[JuzAyahOut]
+
+
+class AyahMetaOut(BaseModel):
+    juz: int
+    from_ayah: int
+    to_ayah: int
+    from_page: int
+    to_page: int
+    juz_from: int
+    juz_to: int
+    ruku_from: int
+    ruku_to: int
+    surahs: list[SurahRefOut]
+
+
 class SectionMetaOut(BaseModel):
     juz_from: int
     juz_to: int
@@ -138,6 +178,7 @@ class SettingsOut(BaseModel):
     alexa_weekday_time: str
     alexa_weekend_time: str
     revision_lookback_pages: int
+    season_start: date_type | None = None
 
 
 class SettingsUpdate(BaseModel):
@@ -146,6 +187,7 @@ class SettingsUpdate(BaseModel):
     alexa_weekday_time: str | None = None
     alexa_weekend_time: str | None = None
     revision_lookback_pages: int | None = None
+    season_start: date_type | None = None
 
 
 class ProgressOut(BaseModel):
@@ -178,3 +220,48 @@ class StatsOut(BaseModel):
     today_activity: int
     total_sessions: int
     juz_summary: dict[int, list[JuzSummaryOut]] = {}
+    rateable_sessions: list[SessionDetail] = []
+    rated_sessions: list[SessionDetail] = []
+
+
+class HistoryMonthOut(BaseModel):
+    month: str
+    sessions: int
+    pages: int
+    ayahs: int
+    stars: int
+    avg_rating: float | None = None
+
+
+class HistoryJuzOut(BaseModel):
+    juz: int
+    pages_memorised: int
+    total_pages: int
+    percent: float
+    complete: bool
+    sessions: int
+    rated_sessions: int
+    avg_rating: float | None = None
+    duration_days: int | None = None
+
+
+class HistorySummaryOut(BaseModel):
+    student_id: int
+    student_name: str
+    season_start: date_type | None = None
+    first_session: date_type | None = None
+    last_session: date_type | None = None
+    total_sessions: int
+    completed_sessions: int
+    rated_sessions: int
+    total_stars: int
+    avg_rating: float | None = None
+    pages_memorised: int
+    ayahs_memorised: int
+    juzs_completed: int
+
+
+class HistoryOut(BaseModel):
+    summary: HistorySummaryOut
+    by_month: list[HistoryMonthOut]
+    by_juz: list[HistoryJuzOut]

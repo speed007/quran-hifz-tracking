@@ -75,6 +75,15 @@ def migrate_db(db: SessionLocal) -> None:
             "ALTER TABLE sessions ADD COLUMN rated_by_id INTEGER REFERENCES users(id)"
         )
         conn.commit()
+    if "juz" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN juz INTEGER")
+        conn.commit()
+    if "from_ayah" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN from_ayah INTEGER")
+        conn.commit()
+    if "to_ayah" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN to_ayah INTEGER")
+        conn.commit()
 
 
 @asynccontextmanager

@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, SessionDetail, Student, User } from "../api";
+import { api, AyahMeta, JuzAyah, JuzAyahList, SessionDetail, Student, User } from "../api";
 
 export default function LogSession({ user }: { user: User }) {
   const [students, setStudents] = useState<Student[]>([]);
@@ -10,16 +10,13 @@ export default function LogSession({ user }: { user: User }) {
   const [studentId, setStudentId] = useState("");
   const [kind, setKind] = useState<"new" | "revision">("new");
   const [juz, setJuz] = useState("");
-  const [rukuFrom, setRukuFrom] = useState("");
-  const [rukuTo, setRukuTo] = useState("");
-  const [fromPage, setFromPage] = useState("");
-  const [toPage, setToPage] = useState("");
+  const [juzAyahList, setJuzAyahList] = useState<JuzAyahList | null>(null);
+  const [ayahFrom, setAyahFrom] = useState("");
+  const [ayahTo, setAyahTo] = useState("");
+  const [meta, setMeta] = useState<AyahMeta | null>(null);
   const [date, setDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [note, setNote] = useState("");
-  const [surahRef, setSurahRef] = useState<string | null>(null);
-  const [rukuList, setRukuList] = useState<number[]>([]);
-  const [firstRuku, setFirstRuku] = useState(0);
 
   useEffect(() => {
     api.students().then(setStudents).catch(() => {});
@@ -27,80 +24,95 @@ export default function LogSession({ user }: { user: User }) {
 
   useEffect(() => {
     if (!juz) {
-      setRukuList([]);
-      setRukuFrom("");
-      setRukuTo("");
-      setFromPage("");
-      setToPage("");
-      setSurahRef(null);
+      setJuzAyahList(null);
+      setAyahFrom("");
+      setAyahTo("");
+      setMeta(null);
       return;
     }
     api
-      .rukusInJuz(Number(juz))
+      .juzAyahs(Number(juz))
       .then((data) => {
-        setFirstRuku(data.first_ruku);
-        setRukuList(data.rukus);
-        if (data.rukus.length > 0) {
-          setRukuFrom("1");
-          setRukuTo(String(data.rukus.length));
+        setJuzAyahList(data);
+        if (data.ayahs.length > 0) {
+          setAyahFrom("1");
+          setAyahTo(String(data.ayahs.length));
         } else {
-          setRukuFrom("");
-          setRukuTo("");
+          setAyahFrom("");
+          setAyahTo("");
         }
       })
-      .catch(() => setRukuList([]));
+      .catch(() => setJuzAyahList(null));
   }, [juz]);
 
   useEffect(() => {
-    if (!rukuFrom || !rukuTo) {
-      setFromPage("");
-      setToPage("");
-      setSurahRef(null);
+    if (!juz || !ayahFrom || !ayahTo) {
+      setMeta(null);
       return;
     }
-    const localFrom = Number(rukuFrom);
-    const localTo = Number(rukuTo);
-    if (localFrom > localTo) {
-      setFromPage("");
-      setToPage("");
-      setSurahRef(null);
+    const from = Number(ayahFrom);
+    const to = Number(ayahTo);
+    if (from > to) {
+      setMeta(null);
       return;
     }
-    const globalFrom = firstRuku + localFrom - 1;
-    const globalTo = firstRuku + localTo - 1;
-    const promises = [];
-    for (let r = globalFrom; r <= globalTo; r++) {
-      promises.push(api.rukuPages(r));
+    api
+      .ayahMeta(Number(juz), from, to)
+      .then(setMeta)
+      .catch(() => setMeta(null));
+  }, [juz, ayahFrom, ayahTo]);
+
+  function ayahGroups() {
+    if (!juzAyahList) return [];
+    const groups: { surah: JuzAyah; items: JuzAyah[] }[] = [];
+    for (const a of juzAyahList.ayahs) {
+      const last = groups[groups.length - 1];
+      if (last && last.surah.surah_number === a.surah_number) {
+        last.items.push(a);
+      } else {
+        groups.push({ surah: a, items: [a] });
+      }
     }
-    Promise.all(promises)
-      .then((results) => {
-        const allFrom = results.map((r) => r.from_page);
-        const allTo = results.map((r) => r.to_page);
-        setFromPage(String(Math.min(...allFrom)));
-        setToPage(String(Math.max(...allTo)));
-        const names = new Set(
-          results.map((r) => r.surah_name_en).filter(Boolean)
-        );
-        setSurahRef([...names].join(", ") || null);
-      })
-      .catch(() => {
-        setFromPage("");
-        setToPage("");
-        setSurahRef(null);
-      });
-  }, [rukuFrom, rukuTo, firstRuku]);
+    return groups;
+  }
+
+  function renderAyahOptions() {
+    return ayahGroups().map((g) => (
+      <optgroup
+        key={g.surah.surah_number}
+        label={g.surah.surah_name_en ?? `Surah ${g.surah.surah_number}`}
+      >
+        {g.items.map((a) => (
+          <option key={a.local} value={a.local}>
+            Ayah {a.ayah}
+          </option>
+        ))}
+      </optgroup>
+    ));
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
     setMessage("");
     setCreated(null);
+    const from = Number(ayahFrom);
+    const to = Number(ayahTo);
+    if (!juz || !from || !to) {
+      setError("Select the ayah range to log.");
+      return;
+    }
+    if (from > to) {
+      setError("From ayah must be before or equal to To ayah.");
+      return;
+    }
     try {
       const saved = await api.createSession({
         student_id: Number(studentId),
         kind,
-        from_page: Number(fromPage),
-        to_page: Number(toPage) || Number(fromPage),
+        juz: Number(juz),
+        from_ayah: from,
+        to_ayah: to,
         deadline: deadline || undefined,
         date: date || undefined,
         note: note || undefined,
@@ -108,10 +120,10 @@ export default function LogSession({ user }: { user: User }) {
       setMessage("Session logged.");
       setCreated(saved);
       setJuz("");
-      setRukuFrom("");
-      setRukuTo("");
-      setFromPage("");
-      setToPage("");
+      setJuzAyahList(null);
+      setAyahFrom("");
+      setAyahTo("");
+      setMeta(null);
       setDeadline("");
       setNote("");
     } catch (err) {
@@ -163,71 +175,58 @@ export default function LogSession({ user }: { user: User }) {
             ))}
           </select>
         </label>
+        <p className="muted">
+          Select the ayah range the student will cover within this juz (using
+          the 16-line mushaf). Surah, ruku and page info below are shown as
+          reference only.
+        </p>
         <div className="row">
           <label>
-            Ruku from
+            From ayah
             <select
-              value={rukuFrom}
-              onChange={(e) => setRukuFrom(e.target.value)}
+              value={ayahFrom}
+              onChange={(e) => setAyahFrom(e.target.value)}
               required
+              disabled={!juzAyahList}
             >
               <option value="">—</option>
-              {rukuList.map((r, i) => (
-                <option key={r} value={i + 1}>
-                  Ruku {i + 1}
-                </option>
-              ))}
+              {renderAyahOptions()}
             </select>
           </label>
           <label>
-            Ruku to
+            To ayah
             <select
-              value={rukuTo}
-              onChange={(e) => setRukuTo(e.target.value)}
+              value={ayahTo}
+              onChange={(e) => setAyahTo(e.target.value)}
               required
+              disabled={!juzAyahList}
             >
               <option value="">—</option>
-              {rukuList.map((r, i) => (
-                <option key={r} value={i + 1}>
-                  Ruku {i + 1}
-                </option>
-              ))}
+              {renderAyahOptions()}
             </select>
           </label>
         </div>
-        <div className="row">
-          <label>
-            From page
-            <input
-              type="number"
-              min={1}
-              max={604}
-              value={fromPage}
-              onChange={(e) => setFromPage(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            To page
-            <input
-              type="number"
-              min={1}
-              max={604}
-              value={toPage}
-              onChange={(e) => setToPage(e.target.value)}
-            />
-          </label>
-        </div>
-        {surahRef && (
-          <p className="muted">Surah: {surahRef}</p>
-        )}
-        {rukuFrom && rukuTo && (
-          <p className="success">
-            Ruku {rukuFrom === rukuTo ? rukuFrom : `${rukuFrom}–${rukuTo}`}
-            {fromPage && toPage
-              ? ` · pages ${fromPage}–${toPage}`
-              : ""}
-          </p>
+        {meta && (
+          <div className="card ref-panel">
+            <p className="muted">Reference</p>
+            <p>
+              <strong>Ayahs:</strong> {meta.from_ayah}–{meta.to_ayah} of Juz{" "}
+              {meta.juz}
+            </p>
+            <p>
+              <strong>Surah:</strong>{" "}
+              {meta.surahs.map((s) => s.name_en).join(", ")}
+            </p>
+            <p>
+              <strong>Ruku:</strong>{" "}
+              {meta.ruku_from === meta.ruku_to
+                ? meta.ruku_from
+                : `${meta.ruku_from}–${meta.ruku_to}`}
+            </p>
+            <p>
+              <strong>Pages:</strong> {meta.from_page}–{meta.to_page}
+            </p>
+          </div>
         )}
         <label>
           Date (defaults to today)
@@ -249,11 +248,10 @@ export default function LogSession({ user }: { user: User }) {
         {message && <p className="success">{message}</p>}
         {created && (
           <div className="card">
-            {created.surah_name_en}, pages {created.from_page}–{created.to_page}
+            Juz {created.juz}, ayahs {created.from_ayah}–
+            {created.to_ayah} · {created.surah_name_en}, pages {created.from_page}–
+            {created.to_page}
             {created.deadline && ` · Deadline: ${created.deadline}`}
-            {created.juz_from != null &&
-              created.juz_to != null &&
-              ` · Juz ${created.juz_from === created.juz_to ? created.juz_from : `${created.juz_from}–${created.juz_to}`}`}
             {created.ruku_from != null &&
               created.ruku_to != null &&
               ` · Ruku ${created.ruku_from === created.ruku_to ? created.ruku_from : `${created.ruku_from}–${created.ruku_to}`}`}

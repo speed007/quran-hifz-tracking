@@ -1,3 +1,5 @@
+from datetime import date, datetime, time
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -16,20 +18,23 @@ def _juz_page_ranges() -> dict[int, tuple[int, int]]:
     }
 
 
-def compute_juz_summary(db: Session, student_id: int) -> list[schemas.JuzSummaryOut]:
+def compute_juz_summary(
+    db: Session, student_id: int, since: date | None = None
+) -> list[schemas.JuzSummaryOut]:
     """Per-juz stats from completed sessions: average stars, days taken, pages.
 
     A session is attributed to the juz it starts in (for ratings, duration and
     session count), but its pages count toward every juz it covers.
+
+    `since` restricts to sessions completed on or after that date (season view).
     """
-    rows = (
-        db.query(models.Session)
-        .filter(
-            models.Session.student_id == student_id,
-            models.Session.completed == True,  # noqa: E712
-        )
-        .all()
+    q = db.query(models.Session).filter(
+        models.Session.student_id == student_id,
+        models.Session.completed == True,  # noqa: E712
     )
+    if since is not None:
+        q = q.filter(models.Session.completed_at >= datetime.combine(since, time.min))
+    rows = q.all()
     juz_pages = _juz_page_ranges()
     pages_by_juz: dict[int, set[int]] = {}
     sessions_by_juz: dict[int, int] = {}
@@ -38,9 +43,12 @@ def compute_juz_summary(db: Session, student_id: int) -> list[schemas.JuzSummary
     completed_at_by_juz: dict[int, list] = {}
 
     for row in rows:
-        jz_from, jz_to, _rk_from, _rk_to = page_range_meta(
-            row.from_page, row.to_page
-        )
+        if row.juz is not None:
+            jz_from = jz_to = row.juz
+        else:
+            jz_from, jz_to, _rk_from, _rk_to = page_range_meta(
+                row.from_page, row.to_page
+            )
         for juz in range(jz_from, jz_to + 1):
             p_from, p_to = juz_pages[juz]
             covered = pages_by_juz.setdefault(juz, set())

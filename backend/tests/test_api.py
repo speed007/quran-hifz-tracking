@@ -1,5 +1,8 @@
 import pytest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+
+from backend.app.database import SessionLocal
+from backend.app.models import Session as SessionRow
 
 
 def login(client, username, password):
@@ -137,6 +140,114 @@ def test_sessions_and_stats_progress(client):
     body = client.get("/api/stats").json()
     progress = body["progress"][str(student["id"])]
     assert progress["memorised_pages"] == 3
+
+
+def test_juz_ayahs_lists_ayahs_within_juz(client):
+    login_admin(client)
+
+    resp = client.get("/api/sessions/juz-ayahs?juz=1")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["from_ayah"] == 1
+    assert body["to_ayah"] == len(body["ayahs"]) == 148
+    first = body["ayahs"][0]
+    assert first["local"] == 1
+    assert first["surah_number"] == 1
+    assert first["surah_name_en"] == "Al-Fatiha"
+    assert first["ayah"] == 1
+    last = body["ayahs"][-1]
+    assert last["local"] == 148
+    assert last["surah_number"] == 2
+    assert last["ayah"] == 141
+
+    assert client.get("/api/sessions/juz-ayahs?juz=0").status_code == 422
+    assert client.get("/api/sessions/juz-ayahs?juz=31").status_code == 422
+
+
+def test_ayah_meta_resolves_range_to_pages_and_reference(client):
+    login_admin(client)
+
+    # Al-Fatiha (juz 1 ayahs 1..7) sits alone on page 1, ruku 1.
+    resp = client.get("/api/sessions/ayah-meta?juz=1&from_ayah=1&to_ayah=7")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["from_ayah"] == 1
+    assert body["to_ayah"] == 7
+    assert body["from_page"] == body["to_page"] == 1
+    assert body["juz_from"] == body["juz_to"] == 1
+    assert body["ruku_from"] == body["ruku_to"] == 1
+    assert [s["name_en"] for s in body["surahs"]] == ["Al-Fatiha"]
+
+    # A range crossing a surah boundary lists both surahs as reference.
+    resp = client.get("/api/sessions/ayah-meta?juz=1&from_ayah=1&to_ayah=8")
+    names = [s["name_en"] for s in resp.json()["surahs"]]
+    assert names == ["Al-Fatiha", "Al-Baqara"]
+
+    # Validation.
+    assert client.get("/api/sessions/ayah-meta?juz=1&from_ayah=1&to_ayah=149").status_code == 400
+    assert client.get("/api/sessions/ayah-meta?juz=1&from_ayah=8&to_ayah=7").status_code == 400
+
+
+def test_create_session_from_ayah_range(client):
+    login_admin(client)
+    student = create_student(client, "Ayah Logger").json()
+
+    meta = client.get("/api/sessions/ayah-meta?juz=2&from_ayah=1&to_ayah=1").json()
+    assert meta["juz_from"] == 2
+    assert meta["ruku_from"] == meta["ruku_to"]
+    assert [s["number"] for s in meta["surahs"]] == [2]
+
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 2,
+            "from_ayah": 1,
+            "to_ayah": 1,
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["juz"] == 2
+    assert body["from_ayah"] == 1
+    assert body["to_ayah"] == 1
+    assert body["juz_from"] == 2
+    assert body["juz_to"] == 2
+    assert body["surah_name_en"] == "Al-Baqara"
+
+    # Invalid ayah range for the juz is rejected.
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 2,
+            "from_ayah": 1,
+            "to_ayah": 900,
+        },
+    )
+    assert resp.status_code == 400
+
+    # juz without ayahs is rejected.
+    resp = client.post(
+        "/api/sessions",
+        json={"student_id": student["id"], "kind": "new", "juz": 2},
+    )
+    assert resp.status_code == 400
+
+    # juz is optional: page-based sessions still work.
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "from_page": 440,
+            "to_page": 441,
+        },
+    )
+    assert resp.status_code == 201
+    assert resp.json()["juz"] is None
 
 
 def test_complete_unknown_session_returns_404(client):
@@ -287,6 +398,53 @@ def test_rating_unknown_session_returns_404(client):
     assert resp.status_code == 404
 
 
+def test_rateable_sessions_queue(client):
+    login_admin(client)
+    student = create_student(client, "Queue").json()
+    yasin = surah_id_by_number(client, 36)
+    today = date.today()
+
+    # Older session dated today, completed first; newer session dated earlier,
+    # completed second. The queue must sort by completion time, not session date.
+    s_old = create_session(client, student["id"], "new", yasin, 440, 440, date=today.isoformat())
+    s_new = create_session(
+        client, student["id"], "new", yasin, 441, 442,
+        date=(today - timedelta(days=5)).isoformat(),
+    )
+    client.patch(f"/api/sessions/{s_old.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s_new.json()['id']}/complete", json={"completed": True})
+
+    stats = client.get("/api/stats").json()
+    queue = stats["rateable_sessions"]
+    assert [s["id"] for s in queue] == [s_new.json()["id"], s_old.json()["id"]]
+
+    # Rating a session removes it from the queue.
+    client.patch(f"/api/sessions/{s_new.json()['id']}/rating", json={"rating": 5})
+    queue = client.get("/api/stats").json()["rateable_sessions"]
+    assert [s["id"] for s in queue] == [s_old.json()["id"]]
+
+    # Uncompleting a session also removes it from the queue.
+    client.patch(f"/api/sessions/{s_old.json()['id']}/complete", json={"completed": False})
+    assert client.get("/api/stats").json()["rateable_sessions"] == []
+
+
+def test_student_gets_empty_rateable_queue(client):
+    login_admin(client)
+    student = create_student(client, "QueueUser").json()
+    yasin = surah_id_by_number(client, 36)
+    created = create_session(client, student["id"], "new", yasin, 440, 441)
+    client.patch(f"/api/sessions/{created.json()['id']}/complete", json={"completed": True})
+    client.post(
+        "/api/users",
+        json={"name": "Queue User", "username": "queueuser", "password": "queue123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "queueuser")
+    login(client, "queueuser", "queue123")
+
+    stats = client.get("/api/stats").json()
+    assert stats["rateable_sessions"] == []
+
+
 def test_student_cannot_rate(client):
     login_admin(client)
     student = create_student(client, "Rated").json()
@@ -359,6 +517,11 @@ def test_student_sees_rating_and_juz_summary(client):
     assert session["rating"] == 5
     assert session["feedback"] == "Mashallah"
     assert session["rated_by_name"] == "Admin"
+
+    rated = stats["rated_sessions"]
+    assert [s["id"] for s in rated] == [created.json()["id"]]
+    assert rated[0]["rating"] == 5
+    assert rated[0]["feedback"] == "Mashallah"
 
     summary = stats["juz_summary"][str(student["id"])]
     assert len(summary) == 1
@@ -454,11 +617,16 @@ def test_settings_defaults_patch_and_permission(client):
         "alexa_weekday_time": "16:00",
         "alexa_weekend_time": "11:00",
         "revision_lookback_pages": 3,
+        "season_start": None,
     }
 
     patched = client.patch("/api/settings", json={"alexa_weekday_time": "15:30"})
     assert patched.status_code == 200
     assert patched.json()["alexa_weekday_time"] == "15:30"
+
+    with_start = client.patch("/api/settings", json={"season_start": "2026-01-01"})
+    assert with_start.status_code == 200
+    assert with_start.json()["season_start"] == "2026-01-01"
 
     client.post(
         "/api/users",
@@ -468,6 +636,152 @@ def test_settings_defaults_patch_and_permission(client):
 
     denied = client.patch("/api/settings", json={"alexa_weekday_time": "09:00"})
     assert denied.status_code == 403
+
+
+def set_completed_at(session_id, when):
+    db = SessionLocal()
+    try:
+        row = db.get(SessionRow, session_id)
+        row.completed_at = when
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_history_aggregates_monthly_stars_and_juz(client):
+    login_admin(client)
+    student = create_student(client, "Historian").json()
+    yasin = surah_id_by_number(client, 36)
+
+    s1 = create_session(
+        client, student["id"], "new", yasin, 1, 5, date="2026-02-01"
+    )
+    s2 = create_session(
+        client, student["id"], "new", yasin, 6, 8, date="2026-03-01"
+    )
+    s3 = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 1,
+            "from_ayah": 1,
+            "to_ayah": 7,
+            "date": "2026-03-05",
+        },
+    )
+    assert s3.status_code == 201
+    for s in (s1, s2, s3):
+        client.patch(f"/api/sessions/{s.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s1.json()['id']}/rating", json={"rating": 4})
+    client.patch(f"/api/sessions/{s2.json()['id']}/rating", json={"rating": 5})
+    client.patch(f"/api/sessions/{s3.json()['id']}/rating", json={"rating": 3})
+    set_completed_at(s1.json()["id"], datetime(2026, 2, 15, 12, 0))
+    set_completed_at(s2.json()["id"], datetime(2026, 3, 10, 12, 0))
+    set_completed_at(s3.json()["id"], datetime(2026, 3, 20, 12, 0))
+
+    body = client.get(f"/api/stats/history?student_id={student['id']}").json()
+
+    summary = body["summary"]
+    assert summary["student_name"] == "Historian"
+    assert summary["season_start"] == "2026-02-01"
+    assert summary["first_session"] == "2026-02-15"
+    assert summary["last_session"] == "2026-03-20"
+    assert summary["total_sessions"] == 3
+    assert summary["completed_sessions"] == 3
+    assert summary["rated_sessions"] == 3
+    assert summary["total_stars"] == 12
+    assert summary["avg_rating"] == 4.0
+    assert summary["pages_memorised"] == 9
+    assert summary["ayahs_memorised"] == 7
+
+    months = body["by_month"]
+    assert [m["month"] for m in months] == ["2026-02", "2026-03"]
+    assert months[0]["sessions"] == 1
+    assert months[0]["pages"] == 5
+    assert months[0]["stars"] == 4
+    assert months[0]["avg_rating"] == 4.0
+    assert months[1]["sessions"] == 2
+    assert months[1]["pages"] == 4
+    assert months[1]["ayahs"] == 7
+    assert months[1]["stars"] == 8
+    assert months[1]["avg_rating"] == 4.0
+
+    juzs = body["by_juz"]
+    assert [j["juz"] for j in juzs] == [1]
+    assert juzs[0]["sessions"] == 3
+    assert juzs[0]["rated_sessions"] == 3
+    assert juzs[0]["avg_rating"] == 4.0
+    assert juzs[0]["pages_memorised"] == 8
+    assert juzs[0]["duration_days"] == 47
+    assert summary["juzs_completed"] == 0
+
+
+def test_history_season_start_setting_filters(client):
+    login_admin(client)
+    student = create_student(client, "Seasonal").json()
+    yasin = surah_id_by_number(client, 36)
+
+    s1 = create_session(
+        client, student["id"], "new", yasin, 1, 5, date="2025-12-01"
+    )
+    s2 = create_session(
+        client, student["id"], "new", yasin, 6, 8, date="2026-03-01"
+    )
+    client.patch(f"/api/sessions/{s1.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s2.json()['id']}/complete", json={"completed": True})
+    client.patch(f"/api/sessions/{s1.json()['id']}/rating", json={"rating": 5})
+    client.patch(f"/api/sessions/{s2.json()['id']}/rating", json={"rating": 2})
+    set_completed_at(s1.json()["id"], datetime(2025, 12, 20, 12, 0))
+    set_completed_at(s2.json()["id"], datetime(2026, 3, 10, 12, 0))
+
+    client.patch("/api/settings", json={"season_start": "2026-01-01"})
+
+    body = client.get(f"/api/stats/history?student_id={student['id']}").json()
+    summary = body["summary"]
+    assert summary["season_start"] == "2026-01-01"
+    assert summary["total_sessions"] == 1
+    assert summary["completed_sessions"] == 1
+    assert summary["total_stars"] == 2
+    assert summary["first_session"] == summary["last_session"] == "2026-03-10"
+    assert [m["month"] for m in body["by_month"]] == ["2026-03"]
+
+
+def test_history_student_only_sees_own(client):
+    login_admin(client)
+    own = create_student(client, "Owner").json()
+    other = create_student(client, "Other").json()
+    yasin = surah_id_by_number(client, 36)
+    for s in (own, other):
+        c = create_session(client, s["id"], "new", yasin, 440, 441)
+        client.patch(f"/api/sessions/{c.json()['id']}/complete", json={"completed": True})
+        client.patch(f"/api/sessions/{c.json()['id']}/rating", json={"rating": 5})
+    client.post(
+        "/api/users",
+        json={"name": "Owner User", "username": "ownuser", "password": "own12345", "role": "user"},
+    )
+    link_student_to_user(own["id"], "ownuser")
+    login(client, "ownuser", "own12345")
+
+    body = client.get(f"/api/stats/history?student_id={other['id']}").json()
+    assert body["summary"]["student_name"] == "Owner"
+
+    body = client.get("/api/stats/history").json()
+    assert body["summary"]["student_name"] == "Owner"
+
+    login_admin(client)
+    client.post(
+        "/api/users",
+        json={"name": "Orphan", "username": "orphan1", "password": "orphan123", "role": "user"},
+    )
+    login(client, "orphan1", "orphan123")
+    assert client.get("/api/stats/history").status_code == 403
+
+
+def test_history_requires_student_and_valid_student(client):
+    login_admin(client)
+    assert client.get("/api/stats/history").status_code == 400
+    assert client.get("/api/stats/history?student_id=9999").status_code == 404
 
 
 def test_link_code_returns_8_chars(client):

@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,6 +10,7 @@ KEYS = {
     "alexa_weekday_time": "16:00",
     "alexa_weekend_time": "11:00",
     "revision_lookback_pages": "3",
+    "season_start": "",
 }
 
 
@@ -20,7 +23,17 @@ def get_settings_dict(db: Session) -> schemas.SettingsOut:
         alexa_weekday_time=merged["alexa_weekday_time"],
         alexa_weekend_time=merged["alexa_weekend_time"],
         revision_lookback_pages=int(merged["revision_lookback_pages"]),
+        season_start=_parse_date(merged["season_start"]),
     )
+
+
+def _parse_date(value: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def update_setting(db: Session, field: str, value) -> None:

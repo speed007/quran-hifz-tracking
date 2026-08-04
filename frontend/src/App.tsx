@@ -3,6 +3,7 @@ import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api, User } from "./api";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import HistoryPage from "./pages/History";
 import LogSession from "./pages/LogSession";
 import Students from "./pages/Students";
 import SettingsPage from "./pages/Settings";
@@ -52,6 +53,7 @@ export default function App() {
       <nav className="nav">
         <span className="brand">Qur'an Hifz</span>
         <NavLink to="/">Dashboard</NavLink>
+        <NavLink to="/history">History</NavLink>
         {user.role !== "user" && <NavLink to="/log">Log session</NavLink>}
         {user.role !== "user" && <NavLink to="/students">Students</NavLink>}
         {user.role !== "user" && <NavLink to="/settings">Settings</NavLink>}
@@ -85,6 +87,7 @@ export default function App() {
       <main className="content">
         <Routes>
           <Route path="/" element={<Dashboard user={user} />} />
+          <Route path="/history" element={<HistoryPage user={user} />} />
           {user.role !== "user" && <Route path="/log" element={<LogSession user={user} />} />}
           {user.role !== "user" && <Route path="/students" element={<Students user={user} />} />}
           {user.role !== "user" && <Route path="/settings" element={<SettingsPage user={user} />} />}

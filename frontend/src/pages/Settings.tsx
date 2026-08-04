@@ -81,6 +81,24 @@ export default function SettingsPage({ user }: { user: User }) {
         </div>
 
         <div className="card">
+          <h3>Season</h3>
+          <p className="muted">
+            Historical analytics (History page) start from this date. Leave
+            empty to use each student's first session.
+          </p>
+          <label>
+            Season start
+            <input
+              type="date"
+              value={settings.season_start ?? ""}
+              onChange={(e) =>
+                save({ season_start: e.target.value || null })
+              }
+            />
+          </label>
+        </div>
+
+        <div className="card">
           <h3>Telegram</h3>
           <p className="muted">
             Daily progress summary sent to linked admins at this time.

@@ -174,6 +174,34 @@ def surah_global_range(surah_number: int) -> tuple[int, int]:
     return start, end
 
 
+def surah_of_ayah(ayah: int) -> int:
+    """Return the surah number (1..114) that a global ayah id belongs to."""
+    idx = bisect.bisect_right(SURAH_START_AYAH, ayah) - 1
+    return max(1, idx)
+
+
+def surahs_in_range(first_ayah: int, last_ayah: int) -> list[int]:
+    """Surah numbers (1..114) covered by the inclusive global ayah range."""
+    numbers: list[int] = []
+    n = surah_of_ayah(first_ayah)
+    while n <= 114:
+        start = SURAH_START_AYAH[n]
+        end = SURAH_START_AYAH[n + 1] - 1 if n < 114 else TOTAL_AYAHS
+        if end >= first_ayah:
+            numbers.append(n)
+            if end >= last_ayah:
+                break
+        n += 1
+    return numbers
+
+
+def juz_ayah_range(juz_num: int) -> tuple[int, int]:
+    """Return (first_global_ayah, last_global_ayah) of a juz (1..30)."""
+    first = JUZ[juz_num]
+    last = JUZ[juz_num + 1] - 1 if juz_num < TOTAL_JUZS else TOTAL_AYAHS
+    return first, last
+
+
 def ayah_global(surah_number: int, ayah_number: int) -> int:
     """Convert (surah, ayah) into a global ayah id (1..6236)."""
     return SURAH_START_AYAH[surah_number] + ayah_number - 1

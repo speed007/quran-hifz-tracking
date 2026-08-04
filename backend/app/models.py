@@ -67,6 +67,9 @@ class Session(Base):
     surah_id: Mapped[int] = mapped_column(ForeignKey("surahs.id"))
     from_page: Mapped[int] = mapped_column(Integer)
     to_page: Mapped[int] = mapped_column(Integer)
+    juz: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    from_ayah: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    to_ayah: Mapped[int | None] = mapped_column(Integer, nullable=True)
     date: Mapped[date] = mapped_column(Date, index=True, server_default=func.date("now"))
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     logged_by_id: Mapped[int | None] = mapped_column(
