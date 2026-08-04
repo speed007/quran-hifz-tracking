@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from .progress import revision_range
+from .reminders import slugify
 from .settings import get_settings_dict
 
 logger = logging.getLogger(__name__)
@@ -60,10 +61,6 @@ def schedule_for_today(db: Session) -> list[tuple[models.Student, str, str]]:
         message = build_revision_message(db, student, settings_obj)
         if message is None:
             continue
-        slug = _slugify(student.name)
+        slug = slugify(student.name)
         result.append((student, slug, message))
     return result
-
-
-def _slugify(name: str) -> str:
-    return "".join(ch for ch in name.lower() if ch.isalnum() or ch in "_-") or "student"

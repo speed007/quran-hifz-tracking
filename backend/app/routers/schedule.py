@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
-from ..deps import get_current_user, get_db
+from ..deps import get_current_user, get_db, require_admin
+from ..services import mqtt as mqtt_service
+from ..services.reminders import build_schedule_state, slugify
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -53,6 +55,25 @@ def _to_out(db: Session, rows: list[models.ScheduleEntry]) -> list[schemas.Sched
     return out
 
 
+def _publish_state(db: Session, student_id: int) -> None:
+    student = db.get(models.Student, student_id)
+    if student is None:
+        return
+    rows = (
+        db.query(models.ScheduleEntry)
+        .filter(models.ScheduleEntry.student_id == student_id)
+        .order_by(
+            models.ScheduleEntry.day_of_week.asc().nullslast(),
+            models.ScheduleEntry.date.asc().nullslast(),
+            models.ScheduleEntry.start_time,
+        )
+        .all()
+    )
+    mqtt_service.publisher.publish_schedule_state(
+        slugify(student.name), build_schedule_state(rows)
+    )
+
+
 @router.get("", response_model=list[schemas.ScheduleEntryOut])
 def list_schedule(
     student_id: int | None = None,
@@ -98,6 +119,7 @@ def create_schedule_entry(
     db.add(row)
     db.commit()
     db.refresh(row)
+    _publish_state(db, student_id)
     return _to_out(db, [row])[0]
 
 
@@ -123,6 +145,7 @@ def update_schedule_entry(
     _validate_times(row.start_time, row.end_time)
     db.commit()
     db.refresh(row)
+    _publish_state(db, row.student_id)
     return _to_out(db, [row])[0]
 
 
@@ -142,3 +165,40 @@ def delete_schedule_entry(
             )
     db.delete(row)
     db.commit()
+    _publish_state(db, row.student_id)
+
+
+@router.patch("/alexa/{student_id}", response_model=schemas.StudentOut)
+def update_student_alexa(
+    student_id: int,
+    payload: schemas.StudentAlexaUpdate,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_admin),
+):
+    """Enable/disable Alexa schedule reminders for a student and set their lead time."""
+    student = db.get(models.Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=404, detail="Student not found")
+    if payload.enabled is not None:
+        student.alexa_schedule_enabled = payload.enabled
+    if payload.lead_minutes is not None:
+        student.alexa_schedule_lead_minutes = payload.lead_minutes
+    db.commit()
+    db.refresh(student)
+    return student
+
+
+@router.post("/alexa/test/{student_id}")
+def test_student_alexa(
+    student_id: int,
+    db: Session = Depends(get_db),
+    _: models.User = Depends(require_admin),
+):
+    """Publish a test announcement for a student so the HA pipe can be verified."""
+    student = db.get(models.Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=404, detail="Student not found")
+    published = mqtt_service.publisher.publish_schedule_reminder(
+        slugify(student.name), "This is a test announcement from the Quran app."
+    )
+    return {"published": published}

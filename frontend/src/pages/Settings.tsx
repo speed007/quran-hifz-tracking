@@ -1,14 +1,65 @@
 import { useEffect, useState } from "react";
-import { api, Settings, User } from "../api";
+import { api, ScheduleEntry, Settings, Student, User } from "../api";
+
+const WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
+function fmtTime(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "pm" : "am";
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}:${String(m).padStart(2, "0")}${period}`;
+}
+
+function fmtDate(d: string) {
+  const [y, m, day] = d.split("-").map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export default function SettingsPage({ user }: { user: User }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const [students, setStudents] = useState<Student[]>([]);
+  const [studentId, setStudentId] = useState<number | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [alexaMsg, setAlexaMsg] = useState("");
+  const [alexaErr, setAlexaErr] = useState("");
+
   useEffect(() => {
     api.settings().then(setSettings).catch((e) => setError((e as Error).message));
   }, []);
+
+  useEffect(() => {
+    api
+      .students()
+      .then(setStudents)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (studentId == null) {
+      setSchedule([]);
+      return;
+    }
+    api
+      .schedule({ student_id: studentId })
+      .then(setSchedule)
+      .catch((e) => setAlexaErr((e as Error).message));
+  }, [studentId]);
 
   if (user.role !== "creator") {
     return <div className="card">Only the creator can change settings.</div>;
@@ -27,6 +78,37 @@ export default function SettingsPage({ user }: { user: User }) {
       setError((err as Error).message);
     }
   }
+
+  async function saveStudentAlexa(update: { enabled?: boolean; lead_minutes?: number }) {
+    if (studentId == null) return;
+    setAlexaErr("");
+    setAlexaMsg("");
+    try {
+      const updated = await api.updateStudentAlexa(studentId, update);
+      setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+      setAlexaMsg("Saved.");
+    } catch (err) {
+      setAlexaErr((err as Error).message);
+    }
+  }
+
+  async function testAnnounce() {
+    if (studentId == null) return;
+    setAlexaErr("");
+    setAlexaMsg("");
+    try {
+      const { published } = await api.testStudentAlexa(studentId);
+      setAlexaMsg(
+        published
+          ? "Test announcement sent. Check your Echo speakers."
+          : "MQTT is not connected — check the server's broker config (HIFZ_MQTT_HOST)."
+      );
+    } catch (err) {
+      setAlexaErr((err as Error).message);
+    }
+  }
+
+  const selected = students.find((s) => s.id === studentId);
 
   return (
     <div>
@@ -78,6 +160,91 @@ export default function SettingsPage({ user }: { user: User }) {
               }
             />
           </label>
+        </div>
+
+        <div className="card">
+          <h3>Alexa schedule reminders</h3>
+          <p className="muted">
+            Pick a student to see their timetable. When enabled, Home Assistant
+            announces each session before it starts, e.g. "Sara, Memorisation
+            starts at 5:00pm".
+          </p>
+          <label>
+            Student
+            <select
+              value={studentId ?? ""}
+              onChange={(e) => setStudentId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Choose a student…</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selected && (
+            <div className="alexa-schedule">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={selected.alexa_schedule_enabled}
+                  onChange={(e) => saveStudentAlexa({ enabled: e.target.checked })}
+                />
+                Announce schedule reminders for {selected.name}
+              </label>
+              <label>
+                Minutes before each session
+                <input
+                  type="number"
+                  min={0}
+                  max={120}
+                  value={selected.alexa_schedule_lead_minutes}
+                  onChange={(e) =>
+                    saveStudentAlexa({
+                      lead_minutes: Number(e.target.value) || 0,
+                    })
+                  }
+                />
+              </label>
+              <button type="button" className="secondary" onClick={testAnnounce}>
+                Send test announcement
+              </button>
+
+              <h4>Schedule slots</h4>
+              {schedule.length === 0 ? (
+                <p className="muted">No schedule slots for this student yet.</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Time</th>
+                      <th>For</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schedule.map((e) => (
+                      <tr key={e.id}>
+                        <td>
+                          {e.day_of_week != null
+                            ? WEEKDAYS[e.day_of_week]
+                            : fmtDate(e.date ?? "")}
+                        </td>
+                        <td>
+                          {fmtTime(e.start_time)} – {fmtTime(e.end_time)}
+                        </td>
+                        <td>{e.label}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {alexaMsg && <p className="success">{alexaMsg}</p>}
+              {alexaErr && <p className="error">{alexaErr}</p>}
+            </div>
+          )}
         </div>
 
         <div className="card">

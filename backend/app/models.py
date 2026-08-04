@@ -51,6 +51,12 @@ class Student(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    alexa_schedule_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    alexa_schedule_lead_minutes: Mapped[int] = mapped_column(
+        Integer, default=15, server_default="15"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     sessions: Mapped[list["Session"]] = relationship(

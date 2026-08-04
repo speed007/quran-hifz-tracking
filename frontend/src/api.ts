@@ -22,6 +22,8 @@ export interface Surah {
 export interface Student {
   id: number;
   name: string;
+  alexa_schedule_enabled: boolean;
+  alexa_schedule_lead_minutes: number;
 }
 
 export interface Progress {
@@ -345,4 +347,8 @@ export const api = {
     request<ScheduleEntry>(`/api/schedule/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteSchedule: (id: number) =>
     request<void>(`/api/schedule/${id}`, { method: "DELETE" }),
+  updateStudentAlexa: (studentId: number, body: { enabled?: boolean; lead_minutes?: number }) =>
+    request<Student>(`/api/schedule/alexa/${studentId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  testStudentAlexa: (studentId: number) =>
+    request<{ published: boolean }>(`/api/schedule/alexa/test/${studentId}`, { method: "POST" }),
 };

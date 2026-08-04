@@ -12,6 +12,7 @@ settings = get_settings()
 TOPIC_PREFIX = "hifz"
 TOPIC_REVISION = f"{TOPIC_PREFIX}/revision"
 TOPIC_REVISION_ALL = f"{TOPIC_PREFIX}/revision/+"
+TOPIC_SCHEDULE = f"{TOPIC_PREFIX}/schedule"
 
 
 class MqttPublisher:
@@ -33,16 +34,30 @@ class MqttPublisher:
         except Exception as exc:  # pragma: no cover - network dependent
             logger.warning("MQTT connection failed: %s", exc)
 
-    def publish_revision(self, student_slug: str, message: str) -> bool:
+    def _publish(self, topic: str, payload: dict) -> bool:
         if self._client is None:
-            logger.info("MQTT not connected; not publishing revision for %s", student_slug)
+            logger.info("MQTT not connected; not publishing to %s", topic)
             return False
-        topic = f"{TOPIC_REVISION}/{student_slug}"
-        payload = json.dumps({"message": message})
-        result = self._client.publish(topic, payload, qos=1)
+        message = json.dumps(payload)
+        result = self._client.publish(topic, message, qos=1)
         ok = result.rc == mqtt.MQTT_ERR_SUCCESS
         logger.info("MQTT publish %s -> %s ok=%s", topic, message, ok)
         return ok
+
+    def publish_revision(self, student_slug: str, message: str) -> bool:
+        return self._publish(
+            f"{TOPIC_REVISION}/{student_slug}", {"message": message}
+        )
+
+    def publish_schedule_reminder(self, student_slug: str, message: str) -> bool:
+        return self._publish(
+            f"{TOPIC_SCHEDULE}/{student_slug}/remind", {"message": message}
+        )
+
+    def publish_schedule_state(self, student_slug: str, state: list[dict]) -> bool:
+        return self._publish(
+            f"{TOPIC_SCHEDULE}/{student_slug}/state", {"student": student_slug, "slots": state}
+        )
 
     def shutdown(self) -> None:
         if self._client is not None:

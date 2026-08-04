@@ -109,6 +109,20 @@ def migrate_db(db: SessionLocal) -> None:
         cursor.execute("ALTER TABLE sessions ADD COLUMN partial_note TEXT")
         conn.commit()
 
+    # students table: add Alexa schedule reminder columns if missing
+    cursor.execute("PRAGMA table_info(students)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "alexa_schedule_enabled" not in columns:
+        cursor.execute(
+            "ALTER TABLE students ADD COLUMN alexa_schedule_enabled BOOLEAN NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    if "alexa_schedule_lead_minutes" not in columns:
+        cursor.execute(
+            "ALTER TABLE students ADD COLUMN alexa_schedule_lead_minutes INTEGER NOT NULL DEFAULT 15"
+        )
+        conn.commit()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -137,10 +151,13 @@ async def lifespan(app: FastAPI):
     def alexa_tick(now: datetime) -> None:
         db = SessionLocal()
         try:
+            from .services.reminders import schedule_reminders_for_now
             from .services.revision import schedule_for_today
 
             for student, slug, message in schedule_for_today(db):
                 mqtt_service.publisher.publish_revision(slug, message)
+            for slug, message in schedule_reminders_for_now(db):
+                mqtt_service.publisher.publish_schedule_reminder(slug, message)
         finally:
             db.close()
 

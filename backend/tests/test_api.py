@@ -1148,6 +1148,183 @@ def test_schedule_requires_auth(client):
     assert client.get("/api/schedule").status_code == 401
 
 
+def test_student_alexa_config_permissions(client):
+    login_admin(client)
+    student = create_student(client, "Alexa Kid").json()
+    assert student["alexa_schedule_enabled"] is False
+    assert student["alexa_schedule_lead_minutes"] == 15
+
+    patched = client.patch(
+        f"/api/schedule/alexa/{student['id']}",
+        json={"enabled": True, "lead_minutes": 30},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["alexa_schedule_enabled"] is True
+    assert patched.json()["alexa_schedule_lead_minutes"] == 30
+
+    listing = client.get("/api/students").json()
+    assert listing[0]["alexa_schedule_enabled"] is True
+    assert listing[0]["alexa_schedule_lead_minutes"] == 30
+
+    # Students cannot configure reminders.
+    client.post(
+        "/api/users",
+        json={"name": "Alexa User", "username": "alexa1", "password": "alexa123", "role": "user"},
+    )
+    link_student_to_user(student["id"], "alexa1")
+    login(client, "alexa1", "alexa123")
+    assert (
+        client.patch(
+            f"/api/schedule/alexa/{student['id']}",
+            json={"enabled": False},
+        ).status_code
+        == 403
+    )
+    assert client.post(f"/api/schedule/alexa/test/{student['id']}").status_code == 403
+
+
+def test_alexa_test_endpoint_publishes(client):
+    login_admin(client)
+    student = create_student(client, "Test Echo").json()
+
+    resp = client.post(f"/api/schedule/alexa/test/{student['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["published"] is False  # MQTT disabled in tests
+
+    assert client.post("/api/schedule/alexa/test/9999").status_code == 404
+
+
+def test_schedule_reminder_fires_at_lead_time(client, monkeypatch):
+    login_admin(client)
+    student = create_student(client, "Reminder Kid").json()
+    client.patch(
+        f"/api/schedule/alexa/{student['id']}",
+        json={"enabled": True, "lead_minutes": 30},
+    )
+    now_dt = datetime(2026, 8, 3, 17, 30)  # Monday 17:30
+    client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "label": "Memorisation",
+            "day_of_week": now_dt.weekday(),
+            "start_time": "18:00",
+            "end_time": "19:00",
+        },
+    )
+
+    from backend.app.services import reminders
+
+    class FakeDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return now_dt
+
+        @classmethod
+        def combine(cls, d, t):
+            return datetime.combine(d, t)
+
+    monkeypatch.setattr(reminders, "datetime", FakeDatetime)
+
+    db = SessionLocal()
+    try:
+        fired = reminders.schedule_reminders_for_now(db)
+    finally:
+        db.close()
+
+    assert fired == [("reminderkid", "Reminder Kid, Memorisation starts at 6:00pm.")]
+
+
+def test_schedule_reminder_respects_toggle_lead_and_master_switch(client, monkeypatch):
+    login_admin(client)
+    on_student = create_student(client, "On Kid").json()
+    off_student = create_student(client, "Off Kid").json()
+    client.patch(f"/api/schedule/alexa/{on_student['id']}", json={"enabled": True, "lead_minutes": 15})
+    client.patch(f"/api/schedule/alexa/{off_student['id']}", json={"enabled": False})
+
+    now_dt = datetime(2026, 8, 3, 17, 45)  # Monday 17:45
+    for student in (on_student, off_student):
+        client.post(
+            "/api/schedule",
+            json={
+                "student_id": student["id"],
+                "label": "Study",
+                "day_of_week": now_dt.weekday(),
+                "start_time": "18:00",
+                "end_time": "19:00",
+            },
+        )
+
+    from backend.app.services import reminders
+
+    class FakeDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return now_dt
+
+        @classmethod
+        def combine(cls, d, t):
+            return datetime.combine(d, t)
+
+    monkeypatch.setattr(reminders, "datetime", FakeDatetime)
+
+    db = SessionLocal()
+    try:
+        fired = reminders.schedule_reminders_for_now(db)
+        slugs = {slug for slug, _ in fired}
+        assert slugs == {"onkid"}
+
+        # A wrong lead time means nothing fires.
+        client.patch(f"/api/schedule/alexa/{on_student['id']}", json={"lead_minutes": 30})
+        assert reminders.schedule_reminders_for_now(db) == []
+
+        # Master Alexa switch off disables everything.
+        client.patch("/api/settings", json={"alexa_enabled": False})
+        client.patch(f"/api/schedule/alexa/{on_student['id']}", json={"lead_minutes": 15})
+        assert reminders.schedule_reminders_for_now(db) == []
+    finally:
+        db.close()
+
+
+def test_schedule_reminder_one_off_slot(client, monkeypatch):
+    login_admin(client)
+    student = create_student(client, "One Off Kid").json()
+    client.patch(f"/api/schedule/alexa/{student['id']}", json={"enabled": True, "lead_minutes": 5})
+
+    now_dt = datetime(2026, 8, 10, 9, 55)  # Monday 09:55
+    client.post(
+        "/api/schedule",
+        json={
+            "student_id": student["id"],
+            "label": "Revision",
+            "date": now_dt.date().isoformat(),
+            "start_time": "10:00",
+            "end_time": "10:30",
+        },
+    )
+
+    from backend.app.services import reminders
+
+    class FakeDatetime:
+        @classmethod
+        def now(cls, tz=None):
+            return now_dt
+
+        @classmethod
+        def combine(cls, d, t):
+            return datetime.combine(d, t)
+
+    monkeypatch.setattr(reminders, "datetime", FakeDatetime)
+
+    db = SessionLocal()
+    try:
+        fired = reminders.schedule_reminders_for_now(db)
+    finally:
+        db.close()
+
+    assert fired == [("oneoffkid", "One Off Kid, Revision starts at 10:00am.")]
+
+
 def test_link_code_returns_8_chars(client):
     login_admin(client)
 

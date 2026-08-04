@@ -67,6 +67,13 @@ class StudentOut(BaseModel):
 
     id: int
     name: str
+    alexa_schedule_enabled: bool
+    alexa_schedule_lead_minutes: int
+
+
+class StudentAlexaUpdate(BaseModel):
+    enabled: bool | None = None
+    lead_minutes: int | None = Field(default=None, ge=0, le=120)
 
 
 class SessionCreate(BaseModel):
