@@ -1,12 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, User } from "../api";
+import { api, Student, User } from "../api";
 
 export default function Users({ user }: { user: User }) {
   const [users, setUsers] = useState<User[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
+  const [studentId, setStudentId] = useState("");
   const [linkCode, setLinkCode] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -16,6 +18,7 @@ export default function Users({ user }: { user: User }) {
 
   useEffect(() => {
     api.users().then(setUsers).catch((e) => setError((e as Error).message));
+    api.students().then(setStudents).catch(() => {});
   }, [reload]);
 
   async function add(e: FormEvent) {
@@ -23,11 +26,18 @@ export default function Users({ user }: { user: User }) {
     setError("");
     setMessage("");
     try {
-      await api.createUser({ name, username, password, role });
+      await api.createUser({
+        name,
+        username,
+        password,
+        role,
+        student_id: studentId ? Number(studentId) : null,
+      });
       setName("");
       setUsername("");
       setPassword("");
       setRole("user");
+      setStudentId("");
       setMessage("User created.");
       setReload((n) => n + 1);
     } catch (err) {
@@ -96,6 +106,25 @@ export default function Users({ user }: { user: User }) {
     }
   }
 
+  async function changeStudent(target: User, value: string) {
+    setError("");
+    try {
+      await api.updateUser(target.id, {
+        student_id: value ? Number(value) : null,
+      });
+      setReload((n) => n + 1);
+    } catch (err) {
+      setError((err as Error).message);
+      setReload((n) => n + 1);
+    }
+  }
+
+  function studentName(studentId: number | null) {
+    if (studentId == null) return <span className="muted">—</span>;
+    const s = students.find((x) => x.id === studentId);
+    return s ? s.name : <span className="muted">#{studentId}</span>;
+  }
+
   return (
     <div>
       <h1>Users</h1>
@@ -129,6 +158,19 @@ export default function Users({ user }: { user: User }) {
             {isCreator && <option value="admin">Admin</option>}
           </select>
         </label>
+        {role === "user" && (
+          <label>
+            Linked student
+            <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+              <option value="">— None —</option>
+              {students.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="submit">Create user</button>
       </form>
 
@@ -139,6 +181,7 @@ export default function Users({ user }: { user: User }) {
             <th>Name</th>
             <th>Username</th>
             <th>Role</th>
+            <th>Student</th>
             <th>Telegram linked</th>
             <th>Active</th>
             <th>Actions</th>
@@ -150,6 +193,23 @@ export default function Users({ user }: { user: User }) {
               <td>{u.name}</td>
               <td>{u.username}</td>
               <td>{roleLabel(u.role)}</td>
+              <td>
+                {canManage(u) && u.role === "user" ? (
+                  <select
+                    value={u.student_id ? String(u.student_id) : ""}
+                    onChange={(e) => changeStudent(u, e.target.value)}
+                  >
+                    <option value="">—</option>
+                    {students.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  studentName(u.student_id)
+                )}
+              </td>
               <td>{u.telegram_id ? "Yes" : "No"}</td>
               <td>{u.is_active ? "Yes" : "No"}</td>
               <td>

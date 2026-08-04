@@ -12,6 +12,26 @@ def _deny() -> HTTPException:
     return HTTPException(status_code=403, detail="You are not allowed to modify this account")
 
 
+def _validate_student_link(
+    db: Session, student_id: int | None, exclude_user_id: int | None = None
+) -> int | None:
+    """Validate a student link and enforce one-user-per-student."""
+    if student_id is None:
+        return None
+    if db.get(models.Student, student_id) is None:
+        raise HTTPException(status_code=400, detail="Unknown student")
+    taken = db.query(models.User).filter(models.User.student_id == student_id)
+    if exclude_user_id is not None:
+        taken = taken.filter(models.User.id != exclude_user_id)
+    taken = taken.first()
+    if taken is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Student is already linked to user '{taken.username}'",
+        )
+    return student_id
+
+
 def _assert_can_update(actor: models.User, target: models.User, payload: schemas.UserUpdate) -> None:
     """Enforce the account hierarchy for updates.
 
@@ -62,6 +82,7 @@ def create_user(
         username=payload.username,
         password_hash=hash_password(payload.password),
         role=payload.role,
+        student_id=_validate_student_link(db, payload.student_id),
     )
     db.add(user)
     db.commit()
@@ -88,6 +109,8 @@ def update_user(
         user.role = payload.role
     if payload.is_active is not None:
         user.is_active = payload.is_active
+    if "student_id" in payload.model_fields_set:
+        user.student_id = _validate_student_link(db, payload.student_id, exclude_user_id=user.id)
     db.commit()
     db.refresh(user)
     return user

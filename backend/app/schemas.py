@@ -34,6 +34,7 @@ class UserOut(BaseModel):
     role: Role
     telegram_id: int | None = None
     is_active: bool
+    student_id: int | None = None
 
 
 class UserCreate(BaseModel):
@@ -41,6 +42,7 @@ class UserCreate(BaseModel):
     username: str
     password: str = Field(min_length=6)
     role: CreatableRole = "user"
+    student_id: int | None = None
 
 
 class UserUpdate(BaseModel):
@@ -48,6 +50,7 @@ class UserUpdate(BaseModel):
     password: str | None = Field(default=None, min_length=6)
     role: CreatableRole | None = None
     is_active: bool | None = None
+    student_id: int | None = None
 
 
 class StudentCreate(BaseModel):

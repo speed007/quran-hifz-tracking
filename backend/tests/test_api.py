@@ -687,3 +687,67 @@ def test_admin_cannot_disable_user(client):
     login(client, "admin2", "admin2x")
     resp = client.patch(f"/api/users/{user['id']}", json={"is_active": False})
     assert resp.status_code == 403
+
+
+# ---- student <-> user linking -------------------------------------------
+
+
+def test_create_user_with_student_link(client):
+    login_admin(client)
+    student = create_student(client, "Linked").json()
+
+    resp = client.post(
+        "/api/users",
+        json={"name": "Link", "username": "link1", "password": "link123", "role": "user", "student_id": student["id"]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["student_id"] == student["id"]
+
+    # The linked user only sees their own student's data.
+    login(client, "link1", "link123")
+    stats = client.get("/api/stats").json()
+    assert [s["id"] for s in stats["students"]] == [student["id"]]
+
+
+def test_student_link_unique_and_validation(client):
+    login_admin(client)
+    s1 = create_student(client, "One").json()
+    s2 = create_student(client, "Two").json()
+
+    a = client.post(
+        "/api/users",
+        json={"name": "A", "username": "aa1", "password": "aa1234", "role": "user", "student_id": s1["id"]},
+    )
+    assert a.status_code == 201
+
+    # Same student cannot be linked to a second user.
+    dup = client.post(
+        "/api/users",
+        json={"name": "B", "username": "bb1", "password": "bb1234", "role": "user", "student_id": s1["id"]},
+    )
+    assert dup.status_code == 409
+
+    # Unknown student is rejected.
+    bad = client.post(
+        "/api/users",
+        json={"name": "C", "username": "cc1", "password": "cc1234", "role": "user", "student_id": 9999},
+    )
+    assert bad.status_code == 400
+
+    # Moving a link to another student, and conflicts on update.
+    b = client.post(
+        "/api/users",
+        json={"name": "B", "username": "bb1", "password": "bb1234", "role": "user"},
+    )
+    assert b.status_code == 201
+    resp = client.patch(f"/api/users/{b.json()['id']}", json={"student_id": s2["id"]})
+    assert resp.status_code == 200
+    assert resp.json()["student_id"] == s2["id"]
+
+    resp = client.patch(f"/api/users/{a.json()['id']}", json={"student_id": s2["id"]})
+    assert resp.status_code == 409
+
+    # Unlink.
+    resp = client.patch(f"/api/users/{a.json()['id']}", json={"student_id": None})
+    assert resp.status_code == 200
+    assert resp.json()["student_id"] is None
