@@ -629,16 +629,11 @@ def test_settings_defaults_patch_and_permission(client):
         "alexa_weekday_time": "16:00",
         "alexa_weekend_time": "11:00",
         "revision_lookback_pages": 3,
-        "season_start": None,
     }
 
     patched = client.patch("/api/settings", json={"alexa_weekday_time": "15:30"})
     assert patched.status_code == 200
     assert patched.json()["alexa_weekday_time"] == "15:30"
-
-    with_start = client.patch("/api/settings", json={"season_start": "2026-01-01"})
-    assert with_start.status_code == 200
-    assert with_start.json()["season_start"] == "2026-01-01"
 
     client.post(
         "/api/users",
@@ -648,6 +643,18 @@ def test_settings_defaults_patch_and_permission(client):
 
     denied = client.patch("/api/settings", json={"alexa_weekday_time": "09:00"})
     assert denied.status_code == 403
+    denied_get = client.get("/api/settings")
+    assert denied_get.status_code == 403
+
+    # Settings are creator-only: a plain admin is denied too.
+    login_admin(client)
+    client.post(
+        "/api/users",
+        json={"name": "Helper", "username": "helper1", "password": "helper123", "role": "admin"},
+    )
+    login(client, "helper1", "helper123")
+    assert client.get("/api/settings").status_code == 403
+    assert client.patch("/api/settings", json={"alexa_weekday_time": "09:00"}).status_code == 403
 
 
 def set_completed_at(session_id, when):
@@ -729,7 +736,7 @@ def test_history_aggregates_monthly_stars_and_juz(client):
     assert summary["juzs_completed"] == 0
 
 
-def test_history_season_start_setting_filters(client):
+def test_history_season_starts_at_first_session(client):
     login_admin(client)
     student = create_student(client, "Seasonal").json()
     yasin = surah_id_by_number(client, 36)
@@ -747,16 +754,13 @@ def test_history_season_start_setting_filters(client):
     set_completed_at(s1.json()["id"], datetime(2025, 12, 20, 12, 0))
     set_completed_at(s2.json()["id"], datetime(2026, 3, 10, 12, 0))
 
-    client.patch("/api/settings", json={"season_start": "2026-01-01"})
-
     body = client.get(f"/api/stats/history?student_id={student['id']}").json()
     summary = body["summary"]
-    assert summary["season_start"] == "2026-01-01"
-    assert summary["total_sessions"] == 1
-    assert summary["completed_sessions"] == 1
-    assert summary["total_stars"] == 2
-    assert summary["first_session"] == summary["last_session"] == "2026-03-10"
-    assert [m["month"] for m in body["by_month"]] == ["2026-03"]
+    assert summary["season_start"] == "2025-12-01"
+    assert summary["total_sessions"] == 2
+    assert summary["completed_sessions"] == 2
+    assert summary["total_stars"] == 7
+    assert [m["month"] for m in body["by_month"]] == ["2025-12", "2026-03"]
 
 
 def test_history_student_only_sees_own(client):

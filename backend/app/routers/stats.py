@@ -13,7 +13,6 @@ from ..services.progress import (
     covered_ayah_range,
     covered_page_range,
 )
-from ..services.settings import get_settings_dict
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -107,10 +106,10 @@ def history(
     """Per-student historical analytics from the start of the season.
 
     Sessions count toward the month in which they were completed
-    (`completed_at`). The season starts at the `season_start` setting, or at
-    the student's first session if the setting is unset. `kind`, `from_month`
-    and `to_month` narrow the view, and `sessions` lists the matching
-    individual sessions for drill-down.
+    (`completed_at`). The season starts at the student's first session; there
+    is no separate season setting. `kind`, `from_month` and `to_month` narrow
+    the view, and `sessions` lists the matching individual sessions for
+    drill-down.
     """
     if user.role == "user":
         if user.student_id is None:
@@ -126,13 +125,12 @@ def history(
         if month is not None and not _is_month(month):
             raise HTTPException(status_code=400, detail="months must be YYYY-MM")
 
-    setting_start = get_settings_dict(db).season_start
     earliest = (
         db.query(func.min(models.Session.date))
         .filter(models.Session.student_id == student_id)
         .scalar()
     )
-    season_start = setting_start or earliest
+    season_start = earliest
 
     completed_from = None
     if season_start is not None:

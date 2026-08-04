@@ -58,7 +58,7 @@ export default function App() {
         <NavLink to="/schedule">Schedule</NavLink>
         {user.role !== "user" && <NavLink to="/log">Log session</NavLink>}
         {user.role !== "user" && <NavLink to="/students">Students</NavLink>}
-        {user.role !== "user" && <NavLink to="/settings">Settings</NavLink>}
+        {user.role === "creator" && <NavLink to="/settings">Settings</NavLink>}
         {user.role === "creator" && <NavLink to="/users">Users</NavLink>}
         <button
           className="link-button theme-toggle"
@@ -93,7 +93,7 @@ export default function App() {
           <Route path="/schedule" element={<SchedulePage user={user} />} />
           {user.role !== "user" && <Route path="/log" element={<LogSession user={user} />} />}
           {user.role !== "user" && <Route path="/students" element={<Students user={user} />} />}
-          {user.role !== "user" && <Route path="/settings" element={<SettingsPage user={user} />} />}
+          {user.role === "creator" && <Route path="/settings" element={<SettingsPage user={user} />} />}
           {user.role === "creator" && <Route path="/users" element={<Users user={user} />} />}
         </Routes>
       </main>

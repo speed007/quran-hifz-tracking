@@ -10,8 +10,8 @@ export default function SettingsPage({ user }: { user: User }) {
     api.settings().then(setSettings).catch((e) => setError((e as Error).message));
   }, []);
 
-  if (user.role === "user") {
-    return <div className="card">Only admins can change settings.</div>;
+  if (user.role !== "creator") {
+    return <div className="card">Only the creator can change settings.</div>;
   }
   if (error) return <div className="card error">{error}</div>;
   if (!settings) return <div className="center">Loading…</div>;
@@ -75,24 +75,6 @@ export default function SettingsPage({ user }: { user: User }) {
               value={settings.revision_lookback_pages}
               onChange={(e) =>
                 save({ revision_lookback_pages: Number(e.target.value) || settings.revision_lookback_pages })
-              }
-            />
-          </label>
-        </div>
-
-        <div className="card">
-          <h3>Season</h3>
-          <p className="muted">
-            Historical analytics (History page) start from this date. Leave
-            empty to use each student's first session.
-          </p>
-          <label>
-            Season start
-            <input
-              type="date"
-              value={settings.season_start ?? ""}
-              onChange={(e) =>
-                save({ season_start: e.target.value || null })
               }
             />
           </label>

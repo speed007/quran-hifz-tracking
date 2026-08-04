@@ -187,7 +187,6 @@ class SettingsOut(BaseModel):
     alexa_weekday_time: str
     alexa_weekend_time: str
     revision_lookback_pages: int
-    season_start: date_type | None = None
 
 
 class SettingsUpdate(BaseModel):
@@ -196,7 +195,6 @@ class SettingsUpdate(BaseModel):
     alexa_weekday_time: str | None = None
     alexa_weekend_time: str | None = None
     revision_lookback_pages: int | None = None
-    season_start: date_type | None = None
 
 
 class ProgressOut(BaseModel):

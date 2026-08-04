@@ -187,11 +187,9 @@ export default function HistoryPage({ user }: { user: User }) {
 
       {data && (
         <>
-          {data.summary.season_start && (
+          {data.summary.first_session && (
             <p className="muted">
-              Season starts {data.summary.season_start}
-              {data.summary.first_session &&
-                ` · first session ${data.summary.first_session} → last ${data.summary.last_session}`}
+              {data.summary.first_session} → {data.summary.last_session}
             </p>
           )}
           <div className="cards">

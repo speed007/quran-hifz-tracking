@@ -99,7 +99,6 @@ export interface Settings {
   alexa_weekday_time: string;
   alexa_weekend_time: string;
   revision_lookback_pages: number;
-  season_start: string | null;
 }
 
 export interface HistoryMonth {
