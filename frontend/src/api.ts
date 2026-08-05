@@ -250,6 +250,7 @@ export const api = {
     }),
 
   users: () => request<User[]>("/api/users"),
+  studentLogins: () => request<User[]>("/api/users/student-logins"),
   createUser: (body: { name: string; username: string; password: string; role: string; student_id?: number | null }) =>
     request<User>("/api/users", { method: "POST", body: JSON.stringify(body) }),
   updateUser: (id: number, body: Partial<{ name: string; password: string; role: string; is_active: boolean; student_id: number | null }>) =>

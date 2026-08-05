@@ -1446,13 +1446,18 @@ def test_admin_cannot_delete_another_admin(client):
     assert resp.status_code == 403
 
 
-def test_admin_cannot_delete_user(client):
+def test_admin_can_delete_user(client):
     login_admin(client)
     _, user = make_users(client)
 
     login(client, "admin2", "admin2x")
     resp = client.delete(f"/api/users/{user['id']}")
-    assert resp.status_code == 403
+    assert resp.status_code == 204
+
+    # The admin's own listing shows only themselves.
+    users = client.get("/api/users").json()
+    assert len(users) == 1
+    assert users[0]["username"] == "admin2"
 
 
 def test_admin_cannot_delete_creator(client):
@@ -1526,22 +1531,138 @@ def test_creator_can_edit_own_name_and_password(client):
     assert client.get("/api/auth/me").status_code == 200
 
 
-def test_admin_cannot_change_own_password(client):
+def test_admin_can_change_own_password(client):
     login_admin(client)
     make_users(client)
 
     login(client, "admin2", "admin2x")
-    resp = client.patch(f"/api/users/{client.get('/api/auth/me').json()['id']}", json={"password": "rotated"})
-    assert resp.status_code == 403
+    me_id = client.get("/api/auth/me").json()["id"]
+    resp = client.patch(f"/api/users/{me_id}", json={"password": "rotated"})
+    assert resp.status_code == 200
+
+    login(client, "admin2", "rotated")
+    assert client.get("/api/auth/me").status_code == 200
 
 
-def test_admin_cannot_disable_user(client):
+def test_admin_can_disable_user(client):
     login_admin(client)
     _, user = make_users(client)
 
     login(client, "admin2", "admin2x")
     resp = client.patch(f"/api/users/{user['id']}", json={"is_active": False})
-    assert resp.status_code == 403
+    assert resp.status_code == 200
+    assert resp.json()["is_active"] is False
+
+
+def test_list_users_scoped_to_self_for_non_creator(client):
+    login_admin(client)
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    users = client.get("/api/users").json()
+    assert [u["username"] for u in users] == ["admin2"]
+
+    login(client, "plain1", "plain12")
+    users = client.get("/api/users").json()
+    assert [u["username"] for u in users] == ["plain1"]
+
+
+def test_user_can_change_own_name_and_password_only(client):
+    login_admin(client)
+    admin, user = make_users(client)
+
+    login(client, "plain1", "plain12")
+    me_id = client.get("/api/auth/me").json()["id"]
+    resp = client.patch(f"/api/users/{me_id}", json={"name": "Renamed", "password": "newplain"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Renamed"
+
+    login(client, "plain1", "newplain")
+    me = client.get("/api/auth/me").json()
+    assert me["name"] == "Renamed"
+
+    # A plain user cannot promote themselves, disable themselves, or link a student.
+    assert client.patch(f"/api/users/{me_id}", json={"role": "admin"}).status_code == 403
+    assert client.patch(f"/api/users/{me_id}", json={"is_active": False}).status_code == 403
+    assert client.patch(f"/api/users/{me_id}", json={"student_id": 1}).status_code == 403
+    # ... and cannot touch other accounts (the admin here).
+    assert client.patch(f"/api/users/{admin['id']}", json={"password": "hack123"}).status_code == 403
+    assert client.patch(f"/api/users/{admin['id']}", json={"is_active": False}).status_code == 403
+
+
+def test_admin_can_create_student_login(client):
+    login_admin(client)
+    student = create_student(client, "LoginKid").json()
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    resp = client.post(
+        "/api/users",
+        json={
+            "name": "LoginKid",
+            "username": "loginkid",
+            "password": "kid1234",
+            "role": "user",
+            "student_id": student["id"],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["student_id"] == student["id"]
+
+    login(client, "loginkid", "kid1234")
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_admin_can_reset_student_login_password(client):
+    login_admin(client)
+    student = create_student(client, "ResKid").json()
+    make_users(client)
+    created = client.post(
+        "/api/users",
+        json={
+            "name": "ResKid",
+            "username": "reskid",
+            "password": "oldpass",
+            "role": "user",
+            "student_id": student["id"],
+        },
+    )
+    assert created.status_code == 201
+
+    login(client, "admin2", "admin2x")
+    resp = client.patch(f"/api/users/{created.json()['id']}", json={"password": "newpass"})
+    assert resp.status_code == 200
+
+    login(client, "reskid", "newpass")
+    assert client.get("/api/auth/me").status_code == 200
+
+
+def test_student_logins_endpoint(client):
+    login_admin(client)
+    s1 = create_student(client, "SOne").json()
+    s2 = create_student(client, "STwo").json()
+    client.post(
+        "/api/users",
+        json={"name": "SOne", "username": "sone1", "password": "sone123", "role": "user", "student_id": s1["id"]},
+    )
+    client.post(
+        "/api/users",
+        json={"name": "STwo", "username": "stwo1", "password": "stwo123", "role": "user", "student_id": s2["id"]},
+    )
+    client.post(
+        "/api/users",
+        json={"name": "Plain", "username": "plain9", "password": "plain99", "role": "user"},
+    )
+    make_users(client)
+
+    login(client, "admin2", "admin2x")
+    logins = client.get("/api/users/student-logins").json()
+    by_student = {u["student_id"]: u["username"] for u in logins}
+    assert by_student == {s1["id"]: "sone1", s2["id"]: "stwo1"}
+
+    # A plain user is denied.
+    login(client, "plain1", "plain12")
+    assert client.get("/api/users/student-logins").status_code == 403
 
 
 # ---- student <-> user linking -------------------------------------------

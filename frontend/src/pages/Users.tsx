@@ -1,14 +1,107 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, Student, User } from "../api";
+import { api, User } from "../api";
 
 export default function Users({ user }: { user: User }) {
+  const isCreator = user.role === "creator";
+
+  if (!isCreator) return <MyAccount user={user} />;
+  return <UserManagement user={user} />;
+}
+
+function MyAccount({ user }: { user: User }) {
+  const [name, setName] = useState(user.name);
+  const [password, setPassword] = useState("");
+  const [linkCode, setLinkCode] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    const body: { name: string; password?: string } = { name };
+    if (password) body.password = password;
+    try {
+      await api.updateUser(user.id, body);
+      setPassword("");
+      setMessage("Account updated.");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function makeLinkCode() {
+    setError("");
+    try {
+      const res = await api.linkCode();
+      setLinkCode(res.code);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  return (
+    <div>
+      <h1>My account</h1>
+      {error && <p className="error">{error}</p>}
+      {message && <p className="success">{message}</p>}
+      <div className="card">
+        <p>
+          <strong>Username:</strong> {user.username}
+        </p>
+        <p>
+          <strong>Role:</strong>{" "}
+          {user.role === "creator" ? "Creator" : user.role === "admin" ? "Admin" : "User (read-only)"}
+        </p>
+        <p>
+          <strong>Telegram linked:</strong> {user.telegram_id ? "Yes" : "No"}
+        </p>
+        <p>
+          <strong>Status:</strong> {user.is_active ? "Active" : "Disabled"}
+        </p>
+      </div>
+
+      <form className="card form" onSubmit={save}>
+        <h3>Edit your details</h3>
+        <label>
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <label>
+          New password (leave blank to keep current)
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={6}
+          />
+        </label>
+        <button type="submit">Save changes</button>
+      </form>
+
+      <div className="card">
+        <h3>Telegram linking</h3>
+        <p className="muted">
+          To link your Telegram account, generate a code, then send{" "}
+          <code>/start &lt;code&gt;</code> to the bot.
+        </p>
+        <button onClick={makeLinkCode}>Generate link code</button>
+        {linkCode && (
+          <p className="success">
+            Send <code>/start {linkCode}</code> to the bot.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserManagement({ user }: { user: User }) {
   const [users, setUsers] = useState<User[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"user" | "admin">("user");
-  const [studentId, setStudentId] = useState("");
   const [linkCode, setLinkCode] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -18,7 +111,6 @@ export default function Users({ user }: { user: User }) {
 
   useEffect(() => {
     api.users().then(setUsers).catch((e) => setError((e as Error).message));
-    api.students().then(setStudents).catch(() => {});
   }, [reload]);
 
   async function add(e: FormEvent) {
@@ -26,18 +118,11 @@ export default function Users({ user }: { user: User }) {
     setError("");
     setMessage("");
     try {
-      await api.createUser({
-        name,
-        username,
-        password,
-        role,
-        student_id: studentId ? Number(studentId) : null,
-      });
+      await api.createUser({ name, username, password, role });
       setName("");
       setUsername("");
       setPassword("");
       setRole("user");
-      setStudentId("");
       setMessage("User created.");
       setReload((n) => n + 1);
     } catch (err) {
@@ -106,25 +191,6 @@ export default function Users({ user }: { user: User }) {
     }
   }
 
-  async function changeStudent(target: User, value: string) {
-    setError("");
-    try {
-      await api.updateUser(target.id, {
-        student_id: value ? Number(value) : null,
-      });
-      setReload((n) => n + 1);
-    } catch (err) {
-      setError((err as Error).message);
-      setReload((n) => n + 1);
-    }
-  }
-
-  function studentName(studentId: number | null) {
-    if (studentId == null) return <span className="muted">—</span>;
-    const s = students.find((x) => x.id === studentId);
-    return s ? s.name : <span className="muted">#{studentId}</span>;
-  }
-
   return (
     <div>
       <h1>Users</h1>
@@ -155,22 +221,9 @@ export default function Users({ user }: { user: User }) {
           Role
           <select value={role} onChange={(e) => setRole(e.target.value as "user" | "admin")}>
             <option value="user">User (read-only)</option>
-            {isCreator && <option value="admin">Admin</option>}
+            <option value="admin">Admin</option>
           </select>
         </label>
-        {role === "user" && (
-          <label>
-            Linked student
-            <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-              <option value="">— None —</option>
-              {students.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <button type="submit">Create user</button>
       </form>
 
@@ -181,7 +234,6 @@ export default function Users({ user }: { user: User }) {
             <th>Name</th>
             <th>Username</th>
             <th>Role</th>
-            <th>Student</th>
             <th>Telegram linked</th>
             <th>Active</th>
             <th>Actions</th>
@@ -193,23 +245,6 @@ export default function Users({ user }: { user: User }) {
               <td>{u.name}</td>
               <td>{u.username}</td>
               <td>{roleLabel(u.role)}</td>
-              <td>
-                {canManage(u) && u.role === "user" ? (
-                  <select
-                    value={u.student_id ? String(u.student_id) : ""}
-                    onChange={(e) => changeStudent(u, e.target.value)}
-                  >
-                    <option value="">—</option>
-                    {students.map((s) => (
-                      <option key={s.id} value={String(s.id)}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  studentName(u.student_id)
-                )}
-              </td>
               <td>{u.telegram_id ? "Yes" : "No"}</td>
               <td>{u.is_active ? "Yes" : "No"}</td>
               <td>

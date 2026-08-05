@@ -59,7 +59,7 @@ export default function App() {
         {user.role !== "user" && <NavLink to="/log">Log session</NavLink>}
         {user.role !== "user" && <NavLink to="/students">Students</NavLink>}
         {user.role === "creator" && <NavLink to="/settings">Settings</NavLink>}
-        {user.role === "creator" && <NavLink to="/users">Users</NavLink>}
+        <NavLink to="/users">{user.role === "creator" ? "Users" : "My account"}</NavLink>
         <button
           className="link-button theme-toggle"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -94,7 +94,7 @@ export default function App() {
           {user.role !== "user" && <Route path="/log" element={<LogSession user={user} />} />}
           {user.role !== "user" && <Route path="/students" element={<Students user={user} />} />}
           {user.role === "creator" && <Route path="/settings" element={<SettingsPage user={user} />} />}
-          {user.role === "creator" && <Route path="/users" element={<Users user={user} />} />}
+          <Route path="/users" element={<Users user={user} />} />
         </Routes>
       </main>
     </div>
