@@ -13,19 +13,21 @@ and gives you ready-to-paste automation YAML.
 | `hifz/schedule/<student>/state` | Whenever a student's timetable changes | `{"student": "...", "slots": [...]}` |
 
 `<student>` is a slug of the student's name (e.g. `sara`). The MQTT broker
-defaults come from the app server config: host `192.168.102.211`, port `1883`,
-user `mqtt-user`, password `mqtt-user` (override with `HIFZ_MQTT_HOST`,
-`HIFZ_MQTT_PORT`, `HIFZ_MQTT_USER`, `HIFZ_MQTT_PASS` in the server's env).
+address and credentials are **your own** and are set on the app server via
+env vars (see `README.md` → "Placeholders to replace"): `HIFZ_MQTT_HOST`,
+`HIFZ_MQTT_PORT`, `HIFZ_MQTT_USER`, `HIFZ_MQTT_PASS`. Use the exact same
+broker values here as in the app's `.env`.
 
 ## Step 1 — Add the MQTT integration in Home Assistant
 
 1. Open Home Assistant → **Settings** → **Devices & Services** → **Add Integration**.
 2. Search for **MQTT** and add it.
-3. Enter:
-   - Broker: `192.168.102.211`
+3. Enter the same broker details you set in the app's `.env` (replace the
+   placeholders with your real values — see `README.md`):
+   - Broker: `<your-mqtt-broker-host>`
    - Port: `1883`
-   - Username: `mqtt-user`
-   - Password: `mqtt-user`
+   - Username: `<your-mqtt-username>`
+   - Password: `<your-mqtt-password>`
 4. Save. HA is now subscribed to the broker.
 
 ## Step 2 — Install the Alexa Media Player integration

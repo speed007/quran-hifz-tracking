@@ -22,10 +22,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_daily_time: str = "18:00"
 
-    mqtt_host: str = "192.168.102.211"
+    mqtt_host: str = ""  # empty disables MQTT; set HIFZ_MQTT_HOST to your broker
     mqtt_port: int = 1883
-    mqtt_user: str = "mqtt-user"
-    mqtt_pass: str = "mqtt-user"
+    mqtt_user: str = ""
+    mqtt_pass: str = ""
 
     alexa_enabled: bool = True
     alexa_weekday_time: str = "16:00"
