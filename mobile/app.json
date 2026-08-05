@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Qur'an Hifz",
+    "slug": "quran-hifz-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "hifz",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.speed007.quranhifz"
+    },
+    "android": {
+      "package": "com.speed007.quranhifz",
+      "adaptiveIcon": {
+        "backgroundColor": "#0C1411",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}

@@ -8,6 +8,8 @@ The stack:
 
 - **Backend**: FastAPI + SQLAlchemy (SQLite) in `backend/`.
 - **Frontend**: React + Vite in `frontend/`, built and served by FastAPI.
+- **Android app**: Expo / React Native in `mobile/` (see
+  [`mobile/README.md`](mobile/README.md)).
 - **Deployment**: a single Docker container (built by `backend/Dockerfile`)
   plus a `cloudflared` tunnel container for remote access.
 
