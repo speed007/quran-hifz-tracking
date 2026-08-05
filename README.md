@@ -80,6 +80,7 @@ real credentials or addresses.**
 | `your-mqtt-broker-host` | `.env` (`HIFZ_MQTT_HOST`), `docs/home-assistant.md` | Your MQTT broker host/IP |
 | `your-mqtt-username` | `.env` (`HIFZ_MQTT_USER`), `docs/home-assistant.md` | Your MQTT broker username |
 | `your-mqtt-password` | `.env` (`HIFZ_MQTT_PASS`), `docs/home-assistant.md` | Your MQTT broker password |
+| `media_player.your_echo_device_1..3` | `docs/home-assistant.md`, `README.md` | Your Echo speaker entity IDs (the ones your existing automation uses) |
 | `change-me-to-a-long-random-string` | `.env` (`HIFZ_SECRET_KEY`) | A long random secret |
 | `your-telegram-bot-token` (if used) | `.env` (`HIFZ_TELEGRAM_BOT_TOKEN`) | Your @BotFather token |
 | `admin` password | `.env` (`HIFZ_DEFAULT_ADMIN_PASSWORD`) | A strong admin password |
@@ -144,9 +145,9 @@ automation:
             type: tts
             method: all
           target:
-            - media_player.echo_dot_back_room
-            - media_player.echo_dot_front_room
-            - media_player.echo_pop_hallway
+            - media_player.your_echo_device_1
+            - media_player.your_echo_device_2
+            - media_player.your_echo_device_3
           message: "{{ trigger.payload_json.message }}"
         action: notify.alexa_media
 ```

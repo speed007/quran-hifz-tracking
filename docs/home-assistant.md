@@ -59,9 +59,9 @@ action:
         type: tts
         method: all
       target:
-        - media_player.echo_dot_back_room
-        - media_player.echo_dot_front_room
-        - media_player.echo_pop_hallway
+        - media_player.your_echo_device_1
+        - media_player.your_echo_device_2
+        - media_player.your_echo_device_3
       message: "{{ trigger.payload_json.message }}"
     action: notify.alexa_media
 mode: single
@@ -82,9 +82,9 @@ action:
         type: tts
         method: all
       target:
-        - media_player.echo_dot_back_room
-        - media_player.echo_dot_front_room
-        - media_player.echo_pop_hallway
+        - media_player.your_echo_device_1
+        - media_player.your_echo_device_2
+        - media_player.your_echo_device_3
       message: "{{ trigger.payload_json.message }}"
     action: notify.alexa_media
 mode: single
@@ -95,8 +95,10 @@ Notes:
 - This uses the exact same `notify.alexa_media` pattern as your other
   automation (`type: tts`, `method: all`), just with the MQTT message as the
   text.
-- The `target:` list is your Echo devices — keep or change those entity IDs to
-  match the speakers you want announcements on.
+- Replace the `media_player.your_echo_device_N` placeholders under `target:`
+  with your own Echo speaker entity IDs (the same ones your existing
+  automation uses). You can find them in Home Assistant → **Settings** →
+  **Devices** → your Echo device.
 - `mode: single` is fine since each announcement happens at most once a minute.
 
 ## Step 4 — Verify
