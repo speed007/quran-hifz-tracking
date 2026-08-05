@@ -186,16 +186,16 @@ export default function SettingsPage({ user }: { user: User }) {
 
           {selected && (
             <div className="alexa-schedule">
-              <label>
+              <label className="checkbox">
                 <input
                   type="checkbox"
                   checked={selected.alexa_schedule_enabled}
                   onChange={(e) => saveStudentAlexa({ enabled: e.target.checked })}
                 />
-                Announce schedule reminders for {selected.name}
+                <span>Announce schedule reminders for {selected.name}</span>
               </label>
               <label>
-                Minutes before each session
+                <span>Minutes before each session</span>
                 <input
                   type="number"
                   min={0}

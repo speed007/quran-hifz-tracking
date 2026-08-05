@@ -457,6 +457,26 @@ button.secondary:hover {
   font-size: 0.9rem;
 }
 
+.alexa-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.alexa-schedule label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.alexa-schedule label.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
 .row {
   display: flex;
   gap: 0.9rem;
