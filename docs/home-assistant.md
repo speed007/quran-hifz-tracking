@@ -54,11 +54,16 @@ trigger:
     topic: "hifz/schedule/+/remind"
 condition: []
 action:
-  - service: notify.alexa_media
-    data:
-      message: "{{ trigger.payload_json.message }}"
+  - data:
       data:
-        type: announce
+        type: tts
+        method: all
+      target:
+        - media_player.echo_dot_back_room
+        - media_player.echo_dot_front_room
+        - media_player.echo_pop_hallway
+      message: "{{ trigger.payload_json.message }}"
+    action: notify.alexa_media
 mode: single
 ```
 
@@ -72,20 +77,27 @@ trigger:
     topic: "hifz/revision/+"
 condition: []
 action:
-  - service: notify.alexa_media
-    data:
-      message: "{{ trigger.payload_json.message }}"
+  - data:
       data:
-        type: announce
+        type: tts
+        method: all
+      target:
+        - media_player.echo_dot_back_room
+        - media_player.echo_dot_front_room
+        - media_player.echo_pop_hallway
+      message: "{{ trigger.payload_json.message }}"
+    action: notify.alexa_media
 mode: single
 ```
 
 Notes:
-- `type: announce` interrupts what's playing; drop it if you prefer a normal announcement.
-- If you only want specific Echo devices, add `target: media_player.echo_living_room`
-  (or similar) under `data`.
-- If your Alexa integration is set up differently, the only thing to change is
-  the `service:` line (e.g. a TTS service for your media player).
+
+- This uses the exact same `notify.alexa_media` pattern as your other
+  automation (`type: tts`, `method: all`), just with the MQTT message as the
+  text.
+- The `target:` list is your Echo devices — keep or change those entity IDs to
+  match the speakers you want announcements on.
+- `mode: single` is fine since each announcement happens at most once a minute.
 
 ## Step 4 — Verify
 

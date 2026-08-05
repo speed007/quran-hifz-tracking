@@ -129,7 +129,8 @@ per student that a Home Assistant automation turns into spoken announcements:
   `{"student": "amina", "slots": [...]}`
 
 A Home Assistant automation listens on those topics and forwards the message
-to an Alexa device via the `alexa_media` integration. Example:
+to an Alexa device via the `alexa_media` integration. Example (same
+`notify.alexa_media` pattern as any existing announcement you may already run):
 
 ```yaml
 automation:
@@ -138,12 +139,16 @@ automation:
       - platform: mqtt
         topic: "hifz/revision/+"
     action:
-      - service: notify.alexa_media_ha_all
-        data:
-          message: "{{ trigger.payload_json.message }}"
-        data_template:
+      - data:
           data:
-            type: announce
+            type: tts
+            method: all
+          target:
+            - media_player.echo_dot_back_room
+            - media_player.echo_dot_front_room
+            - media_player.echo_pop_hallway
+          message: "{{ trigger.payload_json.message }}"
+        action: notify.alexa_media
 ```
 
 Full step-by-step setup (MQTT integration, Alexa Media Player, ready-to-paste
