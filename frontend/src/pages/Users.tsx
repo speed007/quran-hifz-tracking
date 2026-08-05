@@ -11,7 +11,6 @@ export default function Users({ user }: { user: User }) {
 function MyAccount({ user }: { user: User }) {
   const [name, setName] = useState(user.name);
   const [password, setPassword] = useState("");
-  const [linkCode, setLinkCode] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -30,16 +29,6 @@ function MyAccount({ user }: { user: User }) {
     }
   }
 
-  async function makeLinkCode() {
-    setError("");
-    try {
-      const res = await api.linkCode();
-      setLinkCode(res.code);
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
   return (
     <div>
       <h1>My account</h1>
@@ -52,9 +41,6 @@ function MyAccount({ user }: { user: User }) {
         <p>
           <strong>Role:</strong>{" "}
           {user.role === "creator" ? "Creator" : user.role === "admin" ? "Admin" : "User (read-only)"}
-        </p>
-        <p>
-          <strong>Telegram linked:</strong> {user.telegram_id ? "Yes" : "No"}
         </p>
         <p>
           <strong>Status:</strong> {user.is_active ? "Active" : "Disabled"}
@@ -78,20 +64,6 @@ function MyAccount({ user }: { user: User }) {
         </label>
         <button type="submit">Save changes</button>
       </form>
-
-      <div className="card">
-        <h3>Telegram linking</h3>
-        <p className="muted">
-          To link your Telegram account, generate a code, then send{" "}
-          <code>/start &lt;code&gt;</code> to the bot.
-        </p>
-        <button onClick={makeLinkCode}>Generate link code</button>
-        {linkCode && (
-          <p className="success">
-            Send <code>/start {linkCode}</code> to the bot.
-          </p>
-        )}
-      </div>
     </div>
   );
 }

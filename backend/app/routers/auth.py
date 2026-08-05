@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..config import get_settings
-from ..deps import get_db, get_current_user
+from ..deps import get_db, get_current_user, require_creator
 from ..security import (
     generate_link_code,
     generate_session_token,
@@ -62,7 +62,7 @@ def me(user: models.User = Depends(get_current_user)):
 
 @router.post("/link-code", response_model=schemas.LinkCodeOut)
 def create_link_code(
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(require_creator),
     db: Session = Depends(get_db),
 ):
     code = None

@@ -1325,7 +1325,7 @@ def test_schedule_reminder_one_off_slot(client, monkeypatch):
     assert fired == [("oneoffkid", "One Off Kid, Revision starts at 10:00am.")]
 
 
-def test_link_code_returns_8_chars(client):
+def test_creator_link_code_returns_8_chars(client):
     login_admin(client)
 
     resp = client.post("/api/auth/link-code")
@@ -1333,6 +1333,25 @@ def test_link_code_returns_8_chars(client):
     body = resp.json()
     assert len(body["code"]) == 8
     assert "expires_at" in body
+
+
+def test_non_creator_cannot_generate_link_code(client):
+    login_admin(client)
+    admin, user = make_users(client)
+
+    client.post("/api/auth/logout")
+    resp = login(client, "admin2", "admin2x")
+    assert resp.status_code == 200
+
+    resp = client.post("/api/auth/link-code")
+    assert resp.status_code == 403
+
+    client.post("/api/auth/logout")
+    resp = login(client, "plain1", "plain12")
+    assert resp.status_code == 200
+
+    resp = client.post("/api/auth/link-code")
+    assert resp.status_code == 403
 
 
 def test_delete_student_removes_it(client):

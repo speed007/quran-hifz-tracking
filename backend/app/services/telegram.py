@@ -77,7 +77,7 @@ class TelegramBot:
             admins = (
                 db.query(models.User)
                 .filter(
-                    models.User.role.in_(("admin", "creator")),
+                    models.User.role == "creator",
                     models.User.telegram_id.isnot(None),
                     models.User.is_active.is_(True),
                 )
