@@ -48,6 +48,26 @@ def login(payload: schemas.LoginIn, response: Response, db: Session = Depends(ge
     return user
 
 
+@router.post("/mobile-login", response_model=schemas.MobileLoginOut)
+def mobile_login(payload: schemas.LoginIn, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.username == payload.username).first()
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account disabled")
+
+    token = generate_session_token()
+    record = models.AuthToken(
+        token_hash=hash_token(token),
+        user_id=user.id,
+        expires_at=utcnow() + timedelta(days=settings.session_ttl_days),
+    )
+    db.add(record)
+    db.commit()
+
+    return schemas.MobileLoginOut(token=token, expires_at=record.expires_at, user=user)
+
+
 @router.post("/logout")
 def logout(response: Response, db: Session = Depends(get_db)):
     # Token revocation is handled by clearing the cookie; a missing token is fine.

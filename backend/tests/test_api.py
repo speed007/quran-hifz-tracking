@@ -76,6 +76,33 @@ def test_login_wrong_password_returns_401(client):
     assert resp.status_code == 401
 
 
+def test_mobile_login_returns_token_and_bearer_works(client):
+    resp = client.post("/api/auth/mobile-login", json={"username": "admin", "password": "admin"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["user"]["username"] == "admin"
+    assert len(body["token"]) > 20
+    assert "expires_at" in body
+
+    client.cookies.clear()
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {body['token']}"})
+    assert me.status_code == 200
+    assert me.json()["username"] == "admin"
+
+    students = client.get("/api/students", headers={"Authorization": f"Bearer {body['token']}"})
+    assert students.status_code == 200
+
+
+def test_mobile_login_wrong_password_returns_401(client):
+    resp = client.post("/api/auth/mobile-login", json={"username": "admin", "password": "wrong"})
+    assert resp.status_code == 401
+
+
+def test_bearer_token_invalid_returns_401(client):
+    me = client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-real-token"})
+    assert me.status_code == 401
+
+
 def test_unauthenticated_students_returns_401(client):
     resp = client.get("/api/students")
     assert resp.status_code == 401

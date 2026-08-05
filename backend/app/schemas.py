@@ -188,6 +188,12 @@ class LinkCodeOut(BaseModel):
     expires_at: datetime
 
 
+class MobileLoginOut(BaseModel):
+    token: str
+    expires_at: datetime
+    user: UserOut
+
+
 class SettingsOut(BaseModel):
     telegram_daily_time: str
     alexa_enabled: bool

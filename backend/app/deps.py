@@ -16,8 +16,15 @@ def get_db():
         db.close()
 
 
+def _token_from_request(request: Request) -> str | None:
+    auth = request.headers.get("Authorization")
+    if auth and auth.startswith("Bearer "):
+        return auth[7:].strip() or None
+    return request.cookies.get("hifz_session")
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = request.cookies.get("hifz_session")
+    token = _token_from_request(request)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
