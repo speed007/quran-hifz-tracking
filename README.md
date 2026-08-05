@@ -212,14 +212,181 @@ docker compose up -d cloudflared
 The `cloudflared` container runs `tunnel --no-autoupdate run --token ...` and
 exposes the app's public URL, proxying to the `app` service on port 5101.
 
-## Development without Docker
+## Run on Debian / Debian-based without Docker
+
+This guide covers running the app directly on a Debian (or Ubuntu / Debian LXC
+container) server, without Docker. Two modes are described:
+
+- **Dev mode** — hot-reloading backend (`uvicorn --reload`) and a Vite dev
+  server for the frontend.
+- **Single-service mode (recommended for a server)** — build the frontend once
+  and let the backend serve it, so only one process runs. This is what the
+  Docker image does internally.
+
+All commands assume you are `root` or using `sudo`.
+
+### 1. Install system packages
 
 ```sh
-# Backend (Python 3.11)
-uv venv .venv && source .venv/bin/activate
-uv pip install -r backend/requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 5101 --app-dir backend
-
-# Frontend
-cd frontend && pnpm install && pnpm dev   # dev server proxies /api to :5101
+apt update
+apt install -y git curl ca-certificates build-essential python3 python3-venv python3-dev
 ```
+
+Python 3.11+ is required. On Debian 12 / Ubuntu 24.04 the default `python3` is
+already 3.11+. Check with `python3 --version`.
+
+### 2. Install `uv` (fast Python package manager)
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc          # or ~/.profile, to put uv on PATH
+uv --version
+```
+
+### 3. Install Node.js and pnpm (for the frontend build)
+
+```sh
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt install -y nodejs
+corepack enable          # ships with Node; installs pnpm via Corepack
+pnpm --version
+```
+
+If `corepack` is unavailable, fall back to `npm install -g pnpm`.
+
+### 4. Get the code and create the environment
+
+```sh
+git clone git@github.com:speed007/quran-hifz-tracking.git
+cd quran-hifz-tracking
+
+# Backend environment
+uv venv .venv
+source .venv/bin/activate
+uv pip install -r backend/requirements.txt
+
+# Frontend dependencies
+cd frontend && pnpm install && cd ..
+```
+
+### 5. Configure `.env`
+
+```sh
+cp .env-example .env
+```
+
+Edit `.env` and set (see "Placeholders to replace" above):
+
+- `HIFZ_SECRET_KEY` — a long random string.
+- `HIFZ_DATABASE_URL` — e.g. `sqlite:////opt/quran-hifz/data/hifz.db` so the
+  database lives outside the repo. Create that directory:
+  `mkdir -p /opt/quran-hifz/data`.
+- `HIFZ_MQTT_HOST`, `HIFZ_MQTT_USER`, `HIFZ_MQTT_PASS` — your MQTT broker
+  details (or leave host empty to disable).
+- `HIFZ_DEFAULT_ADMIN_PASSWORD` — a strong admin password for first login.
+
+The app reads `.env` from the directory you launch it in (it also honours
+real shell env vars, which take precedence).
+
+### 6a. Dev mode (two terminals)
+
+Terminal 1 — backend with auto-reload on port 5101:
+
+```sh
+cd quran-hifz-tracking
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 5101 --app-dir backend --reload
+```
+
+Terminal 2 — Vite dev server (proxies `/api` to `:5101`):
+
+```sh
+cd quran-hifz-tracking/frontend
+pnpm dev
+```
+
+Open the Vite URL (usually `http://<server>:5173`).
+
+### 6b. Single-service mode (recommended)
+
+Build the frontend once (outputs to `frontend/dist`, served by the backend):
+
+```sh
+cd quran-hifz-tracking/frontend
+pnpm build
+cd ..
+```
+
+Then run the backend — it serves the built UI at `http://<server>:5101`:
+
+```sh
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 5101 --app-dir backend
+```
+
+Verify: `curl http://localhost:5101/api/health`.
+
+### 7. Run as a systemd service (auto-start on boot)
+
+Create `/etc/systemd/system/hifz.service`:
+
+```ini
+[Unit]
+Description=Quran Hifz Tracker
+After=network.target
+
+[Service]
+User=www-data
+WorkingDirectory=/opt/quran-hifz
+EnvironmentFile=/opt/quran-hifz/.env
+ExecStart=/opt/quran-hifz/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 5101 --app-dir backend
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start it:
+
+```sh
+mkdir -p /opt/quran-hifz/data
+chown -R www-data:www-data /opt/quran-hifz
+systemctl daemon-reload
+systemctl enable --now hifz
+systemctl status hifz
+```
+
+Useful commands:
+
+```sh
+journalctl -u hifz -f      # follow app logs
+systemctl restart hifz     # restart after an update
+```
+
+### 8. Optional — Cloudflare tunnel (remote access)
+
+Install `cloudflared` (see cloudflare.com docs) and run the tunnel pointing at
+`localhost:5101`:
+
+```sh
+cloudflared tunnel --url http://localhost:5101     # quick tunnel (URL printed)
+# or, for a named tunnel:
+cloudflared tunnel run --token <CLOUDFLARED_TOKEN>
+```
+
+Put the token in `.env` as `CLOUDFLARED_TOKEN` (used by the systemd unit via
+`EnvironmentFile`).
+
+### Updating after a new release
+
+```sh
+cd quran-hifz-tracking
+git pull
+cd frontend && pnpm install && pnpm build && cd ..
+source .venv/bin/activate && uv pip install -r backend/requirements.txt
+systemctl restart hifz   # or just re-run uvicorn if not using systemd
+```
+
+The database is kept in `/opt/quran-hifz/data/hifz.db` and survives updates;
+new columns are added automatically on startup (`migrate_db`).
