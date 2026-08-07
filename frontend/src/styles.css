@@ -247,9 +247,14 @@ body {
 }
 
 .partial-info {
-  margin: 0.2rem 0 0;
+  margin: 0.35rem 0 0;
   white-space: normal;
-  max-width: 240px;
+  line-height: 1.5;
+  font-size: 0.88rem;
+  font-style: italic;
+  max-width: 320px;
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--border);
 }
 
 tr.completed-row td {
