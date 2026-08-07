@@ -12,6 +12,11 @@ function monthLabel(month: string) {
   });
 }
 
+function chartLabel(month: string) {
+  const [year, m] = month.split("-").map(Number);
+  return new Date(year, m - 1, 1).toLocaleDateString(undefined, { month: "short" });
+}
+
 function stars(rating: number) {
   return <span className="stars-inline" title={`${rating}/5`}>{"★".repeat(Math.round(rating))}</span>;
 }
@@ -45,6 +50,42 @@ export default function HistoryPage({ user }: { user: User }) {
   const [ratingFor, setRatingFor] = useState<number | null>(null);
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
+  const [filtersReady, setFiltersReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("hifz-history-filters");
+      if (raw) {
+        const f = JSON.parse(raw) as Partial<{
+          kind: "" | "new" | "revision";
+          fromMonth: string;
+          toMonth: string;
+          juzFilter: number | null;
+          ratingFilter: number | null;
+          breakdown: Breakdown;
+        }>;
+        if (f) {
+          setKind(f.kind ?? "");
+          setFromMonth(f.fromMonth ?? "");
+          setToMonth(f.toMonth ?? "");
+          setJuzFilter(f.juzFilter ?? null);
+          setRatingFilter(f.ratingFilter ?? null);
+          setBreakdown(f.breakdown ?? "month");
+        }
+      }
+    } catch {
+      // ignore malformed stored filters
+    }
+    setFiltersReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    localStorage.setItem(
+      "hifz-history-filters",
+      JSON.stringify({ kind, fromMonth, toMonth, juzFilter, ratingFilter, breakdown })
+    );
+  }, [filtersReady, kind, fromMonth, toMonth, juzFilter, ratingFilter, breakdown]);
 
   useEffect(() => {
     if (!isStudent) {
@@ -56,6 +97,7 @@ export default function HistoryPage({ user }: { user: User }) {
   }, [isStudent]);
 
   useEffect(() => {
+    if (!filtersReady) return;
     if (studentId == null) {
       setData(null);
       return;
@@ -71,7 +113,7 @@ export default function HistoryPage({ user }: { user: User }) {
     })
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, [isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
+  }, [filtersReady, isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
 
   if (error) return <div className="card error">{error}</div>;
 
@@ -285,6 +327,24 @@ export default function HistoryPage({ user }: { user: User }) {
 
           {breakdown === "month" && data.by_month.length > 0 && (
             <h2>Months — click a row to drill down</h2>
+          )}
+          {breakdown === "month" && data.by_month.length > 0 && (
+            <div className="card chart" aria-label="Pages memorised per month">
+              {data.by_month.map((m) => {
+                const max = Math.max(...data.by_month.map((x) => x.pages));
+                const height = max ? Math.max(Math.round((m.pages / max) * 100), 6) : 6;
+                return (
+                  <div
+                    key={m.month}
+                    className="chart-col"
+                    title={`${monthLabel(m.month)}: ${m.pages} pages`}
+                  >
+                    <div className="chart-bar" style={{ height: `${height}%` }} />
+                    <span className="chart-label">{chartLabel(m.month)}</span>
+                  </div>
+                );
+              })}
+            </div>
           )}
           {breakdown === "month" && data.by_month.length > 0 && (
             <table>

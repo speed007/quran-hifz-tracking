@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, History, SessionDetail, Student, User } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -62,6 +63,44 @@ export default function HistoryPage() {
   const [ratingFor, setRatingFor] = useState<number | null>(null);
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
+  const [filtersReady, setFiltersReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem("hifz-history-filters");
+        if (raw) {
+          const f = JSON.parse(raw) as Partial<{
+            kind: "" | "new" | "revision";
+            fromMonth: string;
+            toMonth: string;
+            juzFilter: number | null;
+            ratingFilter: number | null;
+            breakdown: Breakdown;
+          }>;
+          if (f) {
+            if (f.kind) setKind(f.kind);
+            if (f.fromMonth) setFromMonth(f.fromMonth);
+            if (f.toMonth) setToMonth(f.toMonth);
+            if (f.juzFilter != null) setJuzFilter(f.juzFilter);
+            if (f.ratingFilter != null) setRatingFilter(f.ratingFilter);
+            if (f.breakdown) setBreakdown(f.breakdown);
+          }
+        }
+      } catch {
+        // ignore malformed stored filters
+      }
+      setFiltersReady(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    AsyncStorage.setItem(
+      "hifz-history-filters",
+      JSON.stringify({ kind, fromMonth, toMonth, juzFilter, ratingFilter, breakdown })
+    ).catch(() => {});
+  }, [filtersReady, kind, fromMonth, toMonth, juzFilter, ratingFilter, breakdown]);
 
   useEffect(() => {
     if (!isStudent) {
@@ -76,6 +115,7 @@ export default function HistoryPage() {
   }, [isStudent]);
 
   useEffect(() => {
+    if (!filtersReady) return;
     if (studentId == null && !isStudent) {
       setData(null);
       return;
@@ -92,7 +132,7 @@ export default function HistoryPage() {
       })
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, [isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
+  }, [filtersReady, isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
 
   if (error) return <Screen><ErrorText>{error}</ErrorText></Screen>;
 
