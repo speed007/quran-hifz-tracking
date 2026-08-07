@@ -1,4 +1,4 @@
-const BASE_URL = (
+let baseUrl: string = (
   process.env.EXPO_PUBLIC_API_URL || "http://localhost:5101"
 ).replace(/\/+$/, "");
 
@@ -235,7 +235,11 @@ export function getAuthToken() {
 }
 
 export function apiBaseUrl() {
-  return BASE_URL;
+  return baseUrl;
+}
+
+export function setApiBaseUrl(url: string) {
+  baseUrl = url.trim().replace(/\/+$/, "");
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -244,7 +248,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...((options.headers as Record<string, string>) || {}),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  const res = await fetch(`${baseUrl}${path}`, { ...options, headers });
   if (res.status === 401) {
     onUnauthorized?.();
     throw new Error("Unauthorized");
@@ -254,6 +258,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error((body as { detail?: string }).detail || res.statusText);
   }
   if (res.status === 204) return undefined as T;
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/csv") || contentType.includes("text/plain")) {
+    return res.text() as Promise<T>;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -263,6 +271,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password }),
     }),
+  exportCsv: () =>
+    request<string>("/api/export/csv", {
+      headers: { Accept: "text/csv" },
+    }).then((text) => (typeof text === "string" ? text : String(text))),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   me: () => request<User>("/api/auth/me"),
 

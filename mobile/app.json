@@ -7,6 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "hifz",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#12805C"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.speed007.quranhifz"
@@ -14,7 +19,7 @@
     "android": {
       "package": "com.speed007.quranhifz",
       "adaptiveIcon": {
-        "backgroundColor": "#0C1411",
+        "backgroundColor": "#12805C",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

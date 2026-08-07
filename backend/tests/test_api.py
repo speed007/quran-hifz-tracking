@@ -1437,6 +1437,30 @@ def test_creator_link_code_returns_8_chars(client):
     assert "expires_at" in body
 
 
+def test_export_csv_requires_admin_and_returns_rows(client):
+    login_admin(client)
+    student = create_student(client, "Export Me").json()
+    yasin = surah_id_by_number(client, 36)
+    create_session(client, student["id"], "new", yasin, 1, 5, date="2026-01-10")
+
+    resp = client.get("/api/export/csv")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    text = resp.text
+    assert text.startswith("date,student,kind")
+    assert "Export Me" in text
+    assert "2026-01-10" in text
+    assert "attachment" in resp.headers.get("content-disposition", "")
+
+    client.post("/api/auth/logout")
+    login_admin(client)
+    admin, user = make_users(client)
+    client.post("/api/auth/logout")
+    resp = login(client, "plain1", "plain12")
+    assert resp.status_code == 200
+    assert client.get("/api/export/csv").status_code == 403
+
+
 def test_non_creator_cannot_generate_link_code(client):
     login_admin(client)
     admin, user = make_users(client)

@@ -5,9 +5,10 @@ import React, {
   useState,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, setAuthToken, setUnauthorizedHandler, User } from "./api";
+import { api, setApiBaseUrl, setAuthToken, setUnauthorizedHandler, User } from "./api";
 
 const TOKEN_KEY = "hifz-token";
+const API_URL_KEY = "hifz-api-url";
 
 interface AuthContextValue {
   user: User | null;
@@ -43,6 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     (async () => {
       try {
+        const storedUrl = await AsyncStorage.getItem(API_URL_KEY);
+        if (storedUrl) setApiBaseUrl(storedUrl);
         const stored = await AsyncStorage.getItem(TOKEN_KEY);
         if (!stored) {
           setInitializing(false);

@@ -12,6 +12,7 @@ from .config import get_settings
 from .database import Base, SessionLocal, engine
 from .routers import (
     auth,
+    export,
     schedule,
     sessions,
     settings,
@@ -190,6 +191,7 @@ app.include_router(stats.router, prefix="/api")
 app.include_router(surahs.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(schedule.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 
 @app.get("/api/health")
