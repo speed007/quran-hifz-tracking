@@ -123,12 +123,14 @@ export default function Dashboard({ user }: { user: User }) {
 
   function partialInfo(s: SessionDetail) {
     if (s.completion !== "partial") return null;
+    const range =
+      s.partial_from_ayah != null && s.partial_to_ayah != null
+        ? `Did ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}. `
+        : "Partial. ";
+    const note = `${range}${s.partial_note}`;
     return (
-      <p className="muted partial-info">
-        {s.partial_from_ayah != null && s.partial_to_ayah != null
-          ? `Did ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}. `
-          : "Partial. "}
-        {s.partial_note}
+      <p className="muted partial-info" title={note}>
+        {note}
       </p>
     );
   }

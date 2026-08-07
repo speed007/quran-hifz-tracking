@@ -12,6 +12,21 @@ function monthLabel(month: string) {
   });
 }
 
+function PartialNote({ s }: { s: SessionDetail }) {
+  const range =
+    s.partial_from_ayah != null && s.partial_to_ayah != null
+      ? ` (ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}): `
+      : ": ";
+  const text = `Partial${range}${s.partial_note ?? ""}`;
+  return (
+    <span className="partial-info" title={text}>
+      <strong>Partial</strong>
+      {range}
+      {s.partial_note}
+    </span>
+  );
+}
+
 function chartLabel(month: string) {
   const [year, m] = month.split("-").map(Number);
   return new Date(year, m - 1, 1).toLocaleDateString(undefined, { month: "short" });
@@ -519,13 +534,7 @@ export default function HistoryPage({ user }: { user: User }) {
                       </td>
                       <td className="feedback-cell">
                         {s.completion === "partial" ? (
-                          <span className="partial-info">
-                            <strong>Partial</strong>
-                            {s.partial_from_ayah != null && s.partial_to_ayah != null
-                              ? ` (ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}): `
-                              : ": "}
-                            {s.partial_note}
-                          </span>
+                          <PartialNote s={s} />
                         ) : (
                           s.feedback || <span className="muted">No notes</span>
                         )}
