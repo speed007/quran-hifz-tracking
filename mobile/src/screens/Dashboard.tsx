@@ -1,7 +1,23 @@
-import React, { useEffect, useState } from "react";
+import React, { Fragment, useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { api, SessionDetail, Stats, User } from "../api";
 import { useAuth } from "../auth";
+
+function groupSessions(sessions: SessionDetail[]) {
+  const map = new Map<number, SessionDetail[]>();
+  for (const s of sessions) {
+    const arr = map.get(s.student_id) ?? [];
+    arr.push(s);
+    map.set(s.student_id, arr);
+  }
+  return Array.from(map.entries())
+    .map(([student_id, arr]) => ({
+      student_id,
+      name: arr[0].student_name ?? "Unknown",
+      sessions: arr,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 import {
   Button,
   Card,
@@ -79,6 +95,9 @@ export default function Dashboard() {
     ? stats.recent_sessions.filter((s) => s.student_id === user.student_id)
     : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
+  const sessionGroups = isStudent
+    ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: displaySessions }]
+    : groupSessions(displaySessions);
 
   async function completeSession(
     s: SessionDetail,
@@ -255,10 +274,13 @@ export default function Dashboard() {
       )}
 
       <SectionTitle>Recent sessions</SectionTitle>
-      {displaySessions.length === 0 ? (
+      {sessionGroups.length === 0 ? (
         <EmptyState>No sessions yet.</EmptyState>
       ) : (
-        displaySessions.map((s) => {
+        sessionGroups.map((g) => (
+          <Fragment key={g.student_id}>
+            <SectionTitle>{g.name}</SectionTitle>
+            {g.sessions.map((s) => {
           const overdue = !s.completed && !!s.deadline && new Date(s.deadline) < new Date();
           return (
             <Card key={s.id} style={overdue ? { borderColor: theme.danger } : undefined}>
@@ -387,7 +409,9 @@ export default function Dashboard() {
               )}
             </Card>
           );
-        })
+            })}
+          </Fragment>
+        ))
       )}
     </Screen>
   );

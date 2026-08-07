@@ -265,6 +265,16 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.session-group-row td {
+  background: var(--row-hover);
+  padding: 0.5rem 0.9rem;
+}
+
+.session-group-name {
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
 .session-meta {
   display: flex;
   flex-direction: column;

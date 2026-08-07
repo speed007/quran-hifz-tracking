@@ -2,6 +2,22 @@ import { Fragment, useEffect, useState } from "react";
 import { api, SessionDetail, Stats, User } from "../api";
 import RatingEditor from "../components/RatingEditor";
 
+function groupSessions(sessions: SessionDetail[]) {
+  const map = new Map<number, SessionDetail[]>();
+  for (const s of sessions) {
+    const arr = map.get(s.student_id) ?? [];
+    arr.push(s);
+    map.set(s.student_id, arr);
+  }
+  return Array.from(map.entries())
+    .map(([student_id, arr]) => ({
+      student_id,
+      name: arr[0].student_name ?? "Unknown",
+      sessions: arr,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export default function Dashboard({ user }: { user: User }) {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
@@ -27,6 +43,9 @@ export default function Dashboard({ user }: { user: User }) {
   const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
+  const sessionGroups = isStudent
+    ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: displaySessions }]
+    : groupSessions(displaySessions);
 
   async function completeSession(
     s: SessionDetail,
@@ -170,6 +189,165 @@ export default function Dashboard({ user }: { user: User }) {
       );
     }
     return options;
+  }
+
+  function renderSessionRow(s: SessionDetail) {
+    const overdue = !s.completed && !!s.deadline && new Date(s.deadline) < new Date();
+    const noteText = partialNoteText(s);
+    return (
+      <Fragment key={s.id}>
+        <tr className={`${overdue ? "overdue" : ""} ${s.completed ? "completed-row" : ""}`}>
+          <td>
+            {isStudent ? (
+              s.completed ? (
+                <span className={s.completion === "partial" ? "pending-badge" : "done-badge"}>
+                  {s.completion === "partial" ? "Partial" : "✓ Full"}
+                </span>
+              ) : (
+                <select
+                  className="completion-select"
+                  value=""
+                  disabled={ticking === s.id}
+                  aria-label={`Mark ${s.surah_name_en ?? "session"} as completed`}
+                  onChange={(e) => {
+                    if (e.target.value === "full") {
+                      completeSession(s, { completed: true, completion: "full" });
+                    } else if (e.target.value === "partial") {
+                      openPartial(s);
+                    }
+                  }}
+                >
+                  <option value="">Mark…</option>
+                  <option value="full">Full</option>
+                  <option value="partial" disabled={s.juz == null}>
+                    Partial
+                  </option>
+                </select>
+              )
+            ) : (
+              <span className={s.completed ? "done-badge" : "pending-badge"}>
+                {s.completed
+                  ? s.completion === "partial"
+                    ? "Partial"
+                    : "✓ Done"
+                  : "Pending"}
+              </span>
+            )}
+          </td>
+          <td>{s.date}</td>
+          <td>{s.student_name}</td>
+          <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
+          <td className="hide-mobile">{s.surah_name_en}</td>
+          <td>
+            {s.from_page}–{s.to_page}
+          </td>
+          <td>
+            {s.deadline
+              ? `${s.deadline}${overdue ? " ⚠️" : ""}`
+              : "–"}
+          </td>
+          <td>
+            {s.ruku_from != null && s.ruku_to != null
+              ? s.ruku_from === s.ruku_to
+                ? `Ruku ${s.ruku_from}`
+                : `Ruku ${s.ruku_from}–${s.ruku_to}`
+              : "–"}
+          </td>
+          <td className="hide-mobile">{s.logged_by_name}</td>
+          <td>
+            {s.completed ? (
+              <div className="rate-cell">
+                {s.rating ? stars(s.rating) : <span className="muted">–</span>}
+                {!isStudent && rateButton(s)}
+              </div>
+            ) : (
+              <span className="muted">waiting</span>
+            )}
+          </td>
+        </tr>
+        <tr className="session-meta-row">
+          <td colSpan={10}>
+            <div className="session-meta">
+              <span className="session-meta-label">{sectionReference(s)}</span>
+              {noteText && (
+                <span className="session-meta-note" title={noteText}>
+                  {noteText}
+                </span>
+              )}
+            </div>
+          </td>
+        </tr>
+        {!isStudent && ratingFor === s.id && (
+          <tr key={`rating-${s.id}`} className="rating-editor-row">
+            <td colSpan={10}>
+              <RatingEditor
+                rating={s.rating}
+                feedback={s.feedback}
+                onSave={(r, f) => saveRating(s.id, r, f)}
+                onCancel={() => setRatingFor(null)}
+              />
+            </td>
+          </tr>
+        )}
+        {isStudent && partialFor === s.id && (
+          <tr key={`partial-${s.id}`} className="rating-editor-row">
+            <td colSpan={10}>
+              <div className="rating-editor">
+                <p className="muted">
+                  You were assigned Juz {s.juz} ayahs {s.from_ayah}–
+                  {s.to_ayah}. Select the ayahs you actually did and
+                  explain why you couldn't finish the whole session.
+                </p>
+                <div className="row">
+                  <label>
+                    From ayah
+                    <select
+                      value={partialFrom}
+                      onChange={(e) => setPartialFrom(e.target.value)}
+                    >
+                      {partialAyahOptions(s)}
+                    </select>
+                  </label>
+                  <label>
+                    To ayah
+                    <select
+                      value={partialTo}
+                      onChange={(e) => setPartialTo(e.target.value)}
+                    >
+                      {partialAyahOptions(s)}
+                    </select>
+                  </label>
+                </div>
+                <label>
+                  Why didn't you finish the whole session? (required)
+                  <textarea
+                    value={partialNote}
+                    onChange={(e) => setPartialNote(e.target.value)}
+                  />
+                </label>
+                {error && <p className="error">{error}</p>}
+                <div className="editor-actions row">
+                  <button
+                    type="button"
+                    onClick={() => submitPartial(s)}
+                    disabled={!partialNote.trim() || ticking === s.id}
+                  >
+                    Save partial
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setPartialFor(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+      </Fragment>
+    );
   }
 
   return (
@@ -350,165 +528,17 @@ export default function Dashboard({ user }: { user: User }) {
           </tr>
         </thead>
         <tbody>
-          {displaySessions.map((s) => {
-            const overdue = !s.completed && !!s.deadline && new Date(s.deadline) < new Date();
-            const noteText = partialNoteText(s);
-            return (
-              <Fragment key={s.id}>
-                <tr className={`${overdue ? "overdue" : ""} ${s.completed ? "completed-row" : ""}`}>
-                  <td>
-                    {isStudent ? (
-                      s.completed ? (
-                        <span className={s.completion === "partial" ? "pending-badge" : "done-badge"}>
-                          {s.completion === "partial" ? "Partial" : "✓ Full"}
-                        </span>
-                      ) : (
-                        <select
-                          className="completion-select"
-                          value=""
-                          disabled={ticking === s.id}
-                          aria-label={`Mark ${s.surah_name_en ?? "session"} as completed`}
-                          onChange={(e) => {
-                            if (e.target.value === "full") {
-                              completeSession(s, { completed: true, completion: "full" });
-                            } else if (e.target.value === "partial") {
-                              openPartial(s);
-                            }
-                          }}
-                        >
-                          <option value="">Mark…</option>
-                          <option value="full">Full</option>
-                          <option value="partial" disabled={s.juz == null}>
-                            Partial
-                          </option>
-                        </select>
-                      )
-                    ) : (
-                      <span className={s.completed ? "done-badge" : "pending-badge"}>
-                        {s.completed
-                          ? s.completion === "partial"
-                            ? "Partial"
-                            : "✓ Done"
-                          : "Pending"}
-                      </span>
-                    )}
-                  </td>
-                  <td>{s.date}</td>
-                  <td>{s.student_name}</td>
-                  <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
-                  <td className="hide-mobile">{s.surah_name_en}</td>
-                  <td>
-                    {s.from_page}–{s.to_page}
-                  </td>
-                  <td>
-                    {s.deadline
-                      ? `${s.deadline}${overdue ? " ⚠️" : ""}`
-                      : "–"}
-                  </td>
-                  <td>
-                    {s.ruku_from != null && s.ruku_to != null
-                      ? s.ruku_from === s.ruku_to
-                        ? `Ruku ${s.ruku_from}`
-                        : `Ruku ${s.ruku_from}–${s.ruku_to}`
-                      : "–"}
-                  </td>
-                  <td className="hide-mobile">{s.logged_by_name}</td>
-                  <td>
-                    {s.completed ? (
-                      <div className="rate-cell">
-                        {s.rating ? stars(s.rating) : <span className="muted">–</span>}
-                        {!isStudent && rateButton(s)}
-                      </div>
-                    ) : (
-                      <span className="muted">waiting</span>
-                    )}
-                  </td>
-                </tr>
-                <tr className="session-meta-row">
-                  <td colSpan={10}>
-                    <div className="session-meta">
-                      <span className="session-meta-label">{sectionReference(s)}</span>
-                      {noteText && (
-                        <span className="session-meta-note" title={noteText}>
-                          {noteText}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-                {!isStudent && ratingFor === s.id && (
-                  <tr key={`rating-${s.id}`} className="rating-editor-row">
-                    <td colSpan={10}>
-                      <RatingEditor
-                        rating={s.rating}
-                        feedback={s.feedback}
-                        onSave={(r, f) => saveRating(s.id, r, f)}
-                        onCancel={() => setRatingFor(null)}
-                      />
-                    </td>
-                  </tr>
-                )}
-                {isStudent && partialFor === s.id && (
-                  <tr key={`partial-${s.id}`} className="rating-editor-row">
-                    <td colSpan={10}>
-                      <div className="rating-editor">
-                        <p className="muted">
-                          You were assigned Juz {s.juz} ayahs {s.from_ayah}–
-                          {s.to_ayah}. Select the ayahs you actually did and
-                          explain why you couldn't finish the whole session.
-                        </p>
-                        <div className="row">
-                          <label>
-                            From ayah
-                            <select
-                              value={partialFrom}
-                              onChange={(e) => setPartialFrom(e.target.value)}
-                            >
-                              {partialAyahOptions(s)}
-                            </select>
-                          </label>
-                          <label>
-                            To ayah
-                            <select
-                              value={partialTo}
-                              onChange={(e) => setPartialTo(e.target.value)}
-                            >
-                              {partialAyahOptions(s)}
-                            </select>
-                          </label>
-                        </div>
-                        <label>
-                          Why didn't you finish the whole session? (required)
-                          <textarea
-                            value={partialNote}
-                            onChange={(e) => setPartialNote(e.target.value)}
-                          />
-                        </label>
-                        {error && <p className="error">{error}</p>}
-                        <div className="editor-actions row">
-                          <button
-                            type="button"
-                            onClick={() => submitPartial(s)}
-                            disabled={!partialNote.trim() || ticking === s.id}
-                          >
-                            Save partial
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary"
-                            onClick={() => setPartialFor(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-          {displaySessions.length === 0 && (
+          {sessionGroups.map((g) => (
+            <Fragment key={g.student_id}>
+              <tr className="session-group-row">
+                <td colSpan={10}>
+                  <strong className="session-group-name">{g.name}</strong>
+                </td>
+              </tr>
+              {g.sessions.map((s) => renderSessionRow(s))}
+            </Fragment>
+          ))}
+          {sessionGroups.length === 0 && (
             <tr>
               <td colSpan={10} className="muted">
                 No sessions yet.
