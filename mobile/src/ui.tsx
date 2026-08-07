@@ -122,14 +122,16 @@ export function Field({
   label,
   children,
   hint,
+  style,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
+  style?: StyleProp<ViewStyle>;
 }) {
   const { theme } = useTheme();
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, style]}>
       <Text style={[styles.fieldLabel, { color: theme.muted }]}>{label}</Text>
       {children}
       {hint ? <Muted>{hint}</Muted> : null}

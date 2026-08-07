@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Platform, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StyleProp, Text, TouchableOpacity, View, ViewStyle } from "react-native";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
@@ -23,15 +23,17 @@ function FieldShell({
   value,
   placeholder,
   onPress,
+  style,
 }: {
   label: string;
   value: string;
   placeholder: string;
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const { theme } = useTheme();
   return (
-    <Field label={label}>
+    <Field label={label} style={style}>
       <TouchableOpacity
         onPress={onPress}
         style={{
@@ -179,12 +181,14 @@ export function PickerField({
   options,
   placeholder = "Choose…",
   onChange,
+  style,
 }: {
   label: string;
   value: string | number | null;
   options: PickerOption[];
   placeholder?: string;
   onChange: (value: string | number) => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const [open, setOpen] = useState(false);
   const { theme } = useTheme();
@@ -196,6 +200,7 @@ export function PickerField({
         value={selectedLabel ?? ""}
         placeholder={placeholder}
         onPress={() => setOpen(true)}
+        style={style}
       />
       <PickerModal
         visible={open}

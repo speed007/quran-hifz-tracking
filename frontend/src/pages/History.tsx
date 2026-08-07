@@ -205,6 +205,52 @@ export default function HistoryPage({ user }: { user: User }) {
             <option value="revision">Revision</option>
           </select>
         </label>
+        <label>
+          From month
+          <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
+        </label>
+        <label>
+          To month
+          <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
+        </label>
+        <label>
+          Juz
+          <select value={juzFilter ?? ""} onChange={(e) => setJuzFilter(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Any</option>
+            {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                Juz {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Stars
+          <select value={ratingFilter ?? ""} onChange={(e) => setRatingFilter(e.target.value ? Number(e.target.value) : null)}>
+            <option value="">Any</option>
+            <option value="-1">Not rated</option>
+            <option value="1">1★</option>
+            <option value="2">2★</option>
+            <option value="3">3★</option>
+            <option value="4">4★</option>
+            <option value="5">5★</option>
+          </select>
+        </label>
+        {(kind !== "" || juzFilter != null || ratingFilter != null || fromMonth || toMonth) && (
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              setKind("");
+              setJuzFilter(null);
+              setRatingFilter(null);
+              setFromMonth("");
+              setToMonth("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="segmented" role="tablist" aria-label="Break down by">
@@ -222,68 +268,6 @@ export default function HistoryPage({ user }: { user: User }) {
           </button>
         ))}
       </div>
-
-      {breakdown !== "month" && (
-        <div className="card filters">
-          <label>
-            From month
-            <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
-          </label>
-          <label>
-            To month
-            <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
-          </label>
-        </div>
-      )}
-
-      {breakdown !== "juz" && (
-        <div className="card filters">
-          <label>
-            Juz
-            <select value={juzFilter ?? ""} onChange={(e) => setJuzFilter(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Any</option>
-              {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  Juz {n}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-
-      {breakdown !== "stars" && (
-        <div className="card filters">
-          <label>
-            Stars
-            <select value={ratingFilter ?? ""} onChange={(e) => setRatingFilter(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">Any</option>
-              <option value="-1">Not rated</option>
-              <option value="1">1★</option>
-              <option value="2">2★</option>
-              <option value="3">3★</option>
-              <option value="4">4★</option>
-              <option value="5">5★</option>
-            </select>
-          </label>
-        </div>
-      )}
-
-      {(kind !== "" || juzFilter != null || ratingFilter != null || fromMonth || toMonth) && (
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => {
-            setKind("");
-            setJuzFilter(null);
-            setRatingFilter(null);
-            setFromMonth("");
-            setToMonth("");
-          }}
-        >
-          Clear filters
-        </button>
-      )}
 
       {!data && !error && <div className="center">Loading…</div>}
 
@@ -327,24 +311,6 @@ export default function HistoryPage({ user }: { user: User }) {
 
           {breakdown === "month" && data.by_month.length > 0 && (
             <h2>Months — click a row to drill down</h2>
-          )}
-          {breakdown === "month" && data.by_month.length > 0 && (
-            <div className="card chart" aria-label="Pages memorised per month">
-              {data.by_month.map((m) => {
-                const max = Math.max(...data.by_month.map((x) => x.pages));
-                const height = max ? Math.max(Math.round((m.pages / max) * 100), 6) : 6;
-                return (
-                  <div
-                    key={m.month}
-                    className="chart-col"
-                    title={`${monthLabel(m.month)}: ${m.pages} pages`}
-                  >
-                    <div className="chart-bar" style={{ height: `${height}%` }} />
-                    <span className="chart-label">{chartLabel(m.month)}</span>
-                  </div>
-                );
-              })}
-            </div>
           )}
           {breakdown === "month" && data.by_month.length > 0 && (
             <table>
@@ -559,6 +525,25 @@ export default function HistoryPage({ user }: { user: User }) {
                 ))}
               </tbody>
             </table>
+          )}
+
+          {breakdown === "month" && data.by_month.length > 0 && (
+            <div className="card chart" aria-label="Pages memorised per month">
+              {data.by_month.map((m) => {
+                const max = Math.max(...data.by_month.map((x) => x.pages));
+                const height = max ? Math.max(Math.round((m.pages / max) * 100), 6) : 6;
+                return (
+                  <div
+                    key={m.month}
+                    className="chart-col"
+                    title={`${monthLabel(m.month)}: ${m.pages} pages`}
+                  >
+                    <div className="chart-bar" style={{ height: `${height}%` }} />
+                    <span className="chart-label">{chartLabel(m.month)}</span>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </>
       )}
