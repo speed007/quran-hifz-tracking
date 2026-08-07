@@ -164,10 +164,27 @@ body {
 
 .chart {
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.chart-toggle {
+  margin-bottom: 0;
+}
+
+.chart-bars {
+  display: flex;
   align-items: flex-end;
   gap: 8px;
-  height: 140px;
-  padding: 1rem 1rem 0.5rem;
+  height: 120px;
 }
 
 .chart-col {

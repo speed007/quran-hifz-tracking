@@ -7,6 +7,7 @@ import React, {
 import {
   ActivityIndicator,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -56,10 +57,14 @@ export function useTheme() {
 export function Screen({
   children,
   contentStyle,
+  refreshing,
+  onRefresh,
   ...rest
 }: ViewProps & {
   children: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }) {
   const { theme } = useTheme();
   return (
@@ -67,6 +72,16 @@ export function Screen({
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={[styles.screenContent, contentStyle]}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={!!refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        ) : undefined
+      }
       {...rest}
     >
       {children}

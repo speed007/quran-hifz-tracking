@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { api, AyahMeta, JuzAyah, JuzAyahList, SessionDetail, Student, User } from "../api";
 
 export default function LogSession({ user }: { user: User }) {
@@ -17,6 +17,16 @@ export default function LogSession({ user }: { user: User }) {
   const [date, setDate] = useState("");
   const [deadline, setDeadline] = useState("");
   const [note, setNote] = useState("");
+
+  const fieldRefs = useRef<Array<HTMLSelectElement | HTMLInputElement | null>>([]);
+  function enterNext(index: number) {
+    return (e: React.KeyboardEvent<HTMLSelectElement | HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        fieldRefs.current[index + 1]?.focus();
+      }
+    };
+  }
 
   useEffect(() => {
     api.students().then(setStudents).catch(() => {});
@@ -145,6 +155,8 @@ export default function LogSession({ user }: { user: User }) {
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
             required
+            ref={(el) => (fieldRefs.current[0] = el)}
+            onKeyDown={enterNext(0)}
           >
             <option value="">Choose…</option>
             {students.map((s) => (
@@ -159,6 +171,8 @@ export default function LogSession({ user }: { user: User }) {
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as "new" | "revision")}
+            ref={(el) => (fieldRefs.current[1] = el)}
+            onKeyDown={enterNext(1)}
           >
             <option value="new">Memorised (new)</option>
             <option value="revision">Revision</option>
@@ -166,7 +180,10 @@ export default function LogSession({ user }: { user: User }) {
         </label>
         <label>
           Juz
-          <select value={juz} onChange={(e) => setJuz(e.target.value)} required>
+          <select value={juz} onChange={(e) => setJuz(e.target.value)} required
+            ref={(el) => (fieldRefs.current[2] = el)}
+            onKeyDown={enterNext(2)}
+          >
             <option value="">Choose…</option>
             {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
@@ -188,6 +205,8 @@ export default function LogSession({ user }: { user: User }) {
               onChange={(e) => setAyahFrom(e.target.value)}
               required
               disabled={!juzAyahList}
+              ref={(el) => (fieldRefs.current[3] = el)}
+              onKeyDown={enterNext(3)}
             >
               <option value="">—</option>
               {renderAyahOptions()}
@@ -200,6 +219,8 @@ export default function LogSession({ user }: { user: User }) {
               onChange={(e) => setAyahTo(e.target.value)}
               required
               disabled={!juzAyahList}
+              ref={(el) => (fieldRefs.current[4] = el)}
+              onKeyDown={enterNext(4)}
             >
               <option value="">—</option>
               {renderAyahOptions()}
@@ -230,7 +251,10 @@ export default function LogSession({ user }: { user: User }) {
         )}
         <label>
           Date (defaults to today)
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            ref={(el) => (fieldRefs.current[5] = el)}
+            onKeyDown={enterNext(5)}
+          />
         </label>
         <label>
           Deadline (optional)
@@ -238,11 +262,16 @@ export default function LogSession({ user }: { user: User }) {
             type="date"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
+            ref={(el) => (fieldRefs.current[6] = el)}
+            onKeyDown={enterNext(6)}
           />
         </label>
         <label>
           Note (optional)
-          <input value={note} onChange={(e) => setNote(e.target.value)} />
+          <input value={note} onChange={(e) => setNote(e.target.value)}
+            ref={(el) => (fieldRefs.current[7] = el)}
+            onKeyDown={enterNext(7)}
+          />
         </label>
         {error && <p className="error">{error}</p>}
         {message && <p className="success">{message}</p>}

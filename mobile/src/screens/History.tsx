@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, History, SessionDetail, Student, User } from "../api";
 import { useAuth } from "../auth";
@@ -64,6 +64,7 @@ export default function HistoryPage() {
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
   const [filtersReady, setFiltersReady] = useState(false);
+  const [chartMetric, setChartMetric] = useState<"pages" | "stars">("pages");
 
   useEffect(() => {
     (async () => {
@@ -114,6 +115,22 @@ export default function HistoryPage() {
     }
   }, [isStudent]);
 
+  async function fetchHistory() {
+    try {
+      const d = await api.history({
+        student_id: isStudent ? undefined : studentId ?? undefined,
+        kind: kind || undefined,
+        from_month: fromMonth || undefined,
+        to_month: toMonth || undefined,
+        juz: juzFilter ?? undefined,
+        rating: ratingFilter ?? undefined,
+      });
+      setData(d);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   useEffect(() => {
     if (!filtersReady) return;
     if (studentId == null && !isStudent) {
@@ -121,18 +138,15 @@ export default function HistoryPage() {
       return;
     }
     setSelectedGroup(null);
-    api
-      .history({
-        student_id: isStudent ? undefined : studentId ?? undefined,
-        kind: kind || undefined,
-        from_month: fromMonth || undefined,
-        to_month: toMonth || undefined,
-        juz: juzFilter ?? undefined,
-        rating: ratingFilter ?? undefined,
-      })
-      .then(setData)
-      .catch((e) => setError((e as Error).message));
+    fetchHistory();
   }, [filtersReady, isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  async function handleRefresh() {
+    setRefreshing(true);
+    await fetchHistory();
+    setRefreshing(false);
+  }
 
   if (error) return <Screen><ErrorText>{error}</ErrorText></Screen>;
 
@@ -185,7 +199,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={handleRefresh}>
       <Title>History</Title>
 
       <Card>
@@ -422,6 +436,29 @@ export default function HistoryPage() {
                       onPress={() => setRatingFor(ratingFor === s.id ? null : s.id)}
                     />
                   )}
+                  {!isStudent && (
+                    <LinkButton
+                      title="Delete"
+                      danger
+                      onPress={() =>
+                        Alert.alert("Delete session", "Delete this session? This cannot be undone.", [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                await api.deleteSession(s.id);
+                                await fetchHistory();
+                              } catch (e) {
+                                setError((e as Error).message);
+                              }
+                            },
+                          },
+                        ])
+                      }
+                    />
+                  )}
                 </View>
                 <Text style={{ color: theme.text }}>
                   {s.completion === "partial"
@@ -442,12 +479,21 @@ export default function HistoryPage() {
 
           {breakdown === "month" && data.by_month.length > 0 && (
             <>
-              <SectionTitle>Pages per month</SectionTitle>
+              <SectionTitle>Per month</SectionTitle>
               <Card>
+                <Segmented
+                  options={[
+                    { label: "Pages", value: "pages" },
+                    { label: "Stars", value: "stars" },
+                  ]}
+                  value={chartMetric}
+                  onChange={(v) => setChartMetric(v as "pages" | "stars")}
+                />
                 <View style={styles.chart}>
                   {data.by_month.map((m) => {
-                    const max = Math.max(...data.by_month.map((x) => x.pages));
-                    const h = max ? Math.max(Math.round((m.pages / max) * 100), 6) : 6;
+                    const value = m[chartMetric];
+                    const max = Math.max(...data.by_month.map((x) => x[chartMetric]));
+                    const h = max ? Math.max(Math.round((value / max) * 100), 6) : 6;
                     return (
                       <View key={m.month} style={styles.chartCol}>
                         <View style={[styles.chartBar, { height: `${h}%`, backgroundColor: theme.primary }]} />

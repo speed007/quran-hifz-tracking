@@ -34,6 +34,22 @@ export default function Students() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      setStats(await api.stats());
+      if (isAdmin) {
+        const rows = await api.studentLogins();
+        setLogins(Object.fromEntries(rows.map((r) => [r.student_id ?? -1, r])));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const [logins, setLogins] = useState<Record<number, User>>({});
   const [loginFormFor, setLoginFormFor] = useState<number | null>(null);
@@ -167,7 +183,7 @@ export default function Students() {
   }
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={handleRefresh}>
       <Title>Students</Title>
 
       {isAdmin && (

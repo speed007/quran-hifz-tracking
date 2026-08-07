@@ -51,6 +51,7 @@ export default function HistoryPage({ user }: { user: User }) {
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
   const [filtersReady, setFiltersReady] = useState(false);
+  const [chartMetric, setChartMetric] = useState<"pages" | "stars">("pages");
 
   useEffect(() => {
     try {
@@ -146,18 +147,32 @@ export default function HistoryPage({ user }: { user: User }) {
     }
   }
 
+  function historyParams() {
+    return {
+      student_id: isStudent ? undefined : studentId ?? undefined,
+      kind: kind || undefined,
+      from_month: fromMonth || undefined,
+      to_month: toMonth || undefined,
+      juz: juzFilter ?? undefined,
+      rating: ratingFilter ?? undefined,
+    };
+  }
+
   async function saveRating(id: number, rating: number | null, feedback: string | null) {
     try {
       await api.setSessionRating(id, { rating, feedback });
-      setData(await api.history({
-        student_id: isStudent ? undefined : studentId ?? undefined,
-        kind: kind || undefined,
-        from_month: fromMonth || undefined,
-        to_month: toMonth || undefined,
-        juz: juzFilter ?? undefined,
-        rating: ratingFilter ?? undefined,
-      }));
+      setData(await api.history(historyParams()));
       setRatingFor(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function deleteSession(s: SessionDetail) {
+    if (!confirm(`Delete this session (${s.date})? This cannot be undone.`)) return;
+    try {
+      await api.deleteSession(s.id);
+      setData(await api.history(historyParams()));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -180,6 +195,14 @@ export default function HistoryPage({ user }: { user: User }) {
   return (
     <div>
       <h1>History</h1>
+
+      {!isStudent && (
+        <p>
+          <a className="link-button" href="/api/export/csv">
+            Export CSV
+          </a>
+        </p>
+      )}
 
       <div className="card filters">
         {!isStudent && (
@@ -507,7 +530,18 @@ export default function HistoryPage({ user }: { user: User }) {
                           s.feedback || <span className="muted">No notes</span>
                         )}
                       </td>
-                      {!isStudent && <td>{rateButton(s)}</td>}
+                      {!isStudent && (
+                        <td>
+                          {rateButton(s)}
+                          <button
+                            type="button"
+                            className="link-button danger"
+                            onClick={() => deleteSession(s)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      )}
                     </tr>
                     {!isStudent && ratingFor === s.id && (
                       <tr className="rating-editor-row">
@@ -528,21 +562,39 @@ export default function HistoryPage({ user }: { user: User }) {
           )}
 
           {breakdown === "month" && data.by_month.length > 0 && (
-            <div className="card chart" aria-label="Pages memorised per month">
-              {data.by_month.map((m) => {
-                const max = Math.max(...data.by_month.map((x) => x.pages));
-                const height = max ? Math.max(Math.round((m.pages / max) * 100), 6) : 6;
-                return (
-                  <div
-                    key={m.month}
-                    className="chart-col"
-                    title={`${monthLabel(m.month)}: ${m.pages} pages`}
-                  >
-                    <div className="chart-bar" style={{ height: `${height}%` }} />
-                    <span className="chart-label">{chartLabel(m.month)}</span>
-                  </div>
-                );
-              })}
+            <div className="card chart" aria-label={`${chartMetric} memorised per month`}>
+              <div className="chart-head">
+                <span className="muted">Pages per month</span>
+                <span className="segmented chart-toggle">
+                  {(["pages", "stars"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={chartMetric === m ? "active" : ""}
+                      onClick={() => setChartMetric(m)}
+                    >
+                      {m === "pages" ? "Pages" : "Stars"}
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <div className="chart-bars">
+                {data.by_month.map((m) => {
+                  const value = m[chartMetric];
+                  const max = Math.max(...data.by_month.map((x) => x[chartMetric]));
+                  const height = max ? Math.max(Math.round((value / max) * 100), 6) : 6;
+                  return (
+                    <div
+                      key={m.month}
+                      className="chart-col"
+                      title={`${monthLabel(m.month)}: ${value} ${chartMetric}`}
+                    >
+                      <div className="chart-bar" style={{ height: `${height}%` }} />
+                      <span className="chart-label">{chartLabel(m.month)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </>

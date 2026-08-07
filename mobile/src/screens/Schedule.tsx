@@ -46,6 +46,7 @@ export default function SchedulePage() {
   const [entries, setEntries] = useState<ScheduleEntry[]>([]);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   const [label, setLabel] = useState("");
   const [slotType, setSlotType] = useState<"weekly" | "date">("weekly");
@@ -61,6 +62,12 @@ export default function SchedulePage() {
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   }
 
   useEffect(() => {
@@ -154,7 +161,7 @@ export default function SchedulePage() {
   const oneOff = entries.filter((e) => e.date != null);
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={handleRefresh}>
       <Title>Schedule</Title>
 
       {!isStudent && (

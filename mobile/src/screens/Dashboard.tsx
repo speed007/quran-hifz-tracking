@@ -44,9 +44,21 @@ export default function Dashboard() {
   const [partialFrom, setPartialFrom] = useState<number | null>(null);
   const [partialTo, setPartialTo] = useState<number | null>(null);
   const [partialNote, setPartialNote] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   async function reload() {
     setStats(await api.stats());
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await reload();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   useEffect(() => {
@@ -139,7 +151,7 @@ export default function Dashboard() {
     : stats.rated_sessions;
 
   return (
-    <Screen>
+    <Screen refreshing={refreshing} onRefresh={handleRefresh}>
       <Title>Welcome, {user.name}</Title>
 
       <View style={styles.statsRow}>
@@ -254,10 +266,17 @@ export default function Dashboard() {
                 <Text style={[styles.cardTitle, { color: theme.text }]}>
                   {s.student_name}
                 </Text>
-                <Text style={{ color: theme.muted, fontSize: 12 }}>
-                  {s.date}
-                  {s.deadline ? ` · due ${s.deadline}${overdue ? " ⚠️" : ""}` : ""}
-                </Text>
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  <Text style={{ color: theme.muted, fontSize: 12 }}>
+                    {s.date}
+                    {s.deadline ? ` · due ${s.deadline}` : ""}
+                  </Text>
+                  {overdue && (
+                    <Text style={[styles.overdueChip, { color: theme.danger, borderColor: theme.danger }]}>
+                      Overdue
+                    </Text>
+                  )}
+                </View>
               </View>
               <Text style={{ color: theme.text }}>
                 {s.kind === "new" ? "Memorised" : "Revision"} · {s.surah_name_en} · pages {s.from_page}–
@@ -402,5 +421,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 4,
+  },
+  overdueChip: {
+    fontSize: 10,
+    fontWeight: "800",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    overflow: "hidden",
   },
 });
