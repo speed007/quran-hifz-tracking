@@ -13,6 +13,14 @@ from ..quran_meta import (
 )
 
 
+def session_covers_juz(row: models.Session, juz: int) -> bool:
+    """True if a session's covered range includes the given juz."""
+    if row.juz is not None:
+        return row.juz == juz
+    jz_from, jz_to, _rk_from, _rk_to = page_range_meta(row.from_page, row.to_page)
+    return jz_from <= juz <= jz_to
+
+
 def _juz_page_ranges() -> dict[int, tuple[int, int]]:
     """First and last mushaf page of each juz (1..30)."""
     return {
@@ -82,6 +90,8 @@ def compute_juz_summary(
     kind: str | None = None,
     completed_from: datetime | None = None,
     completed_to: datetime | None = None,
+    rating: int | None = None,
+    juz: int | None = None,
 ) -> list[schemas.JuzSummaryOut]:
     """Per-juz stats from completed sessions: average stars, days taken, pages.
 
@@ -89,7 +99,8 @@ def compute_juz_summary(
     session count), but its pages count toward every juz it covers.
 
     `kind` restricts to a session type; `completed_from`/`completed_to`
-    restrict to completion times (season / drill-down filters).
+    restrict to completion times (season / drill-down filters); `rating` (1-5,
+    or -1 for unrated) and `juz` are additional drill-down filters.
     """
     q = db.query(models.Session).filter(
         models.Session.student_id == student_id,
@@ -101,7 +112,13 @@ def compute_juz_summary(
         q = q.filter(models.Session.completed_at >= completed_from)
     if completed_to is not None:
         q = q.filter(models.Session.completed_at < completed_to)
+    if rating is not None:
+        q = q.filter(
+            models.Session.rating.is_(None) if rating == -1 else models.Session.rating == rating
+        )
     rows = q.all()
+    if juz is not None:
+        rows = [r for r in rows if session_covers_juz(r, juz)]
     juz_pages = _juz_page_ranges()
     pages_by_juz: dict[int, set[int]] = {}
     sessions_by_juz: dict[int, int] = {}

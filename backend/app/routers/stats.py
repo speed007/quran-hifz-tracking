@@ -12,6 +12,7 @@ from ..services.progress import (
     compute_progress,
     covered_ayah_range,
     covered_page_range,
+    session_covers_juz,
 )
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -102,6 +103,8 @@ def history(
     kind: schemas.SessionKind | None = None,
     from_month: str | None = None,
     to_month: str | None = None,
+    juz: int | None = Query(default=None, ge=1, le=30),
+    rating: int | None = Query(default=None, ge=-1, le=5),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
 ):
@@ -109,8 +112,9 @@ def history(
 
     Sessions count toward the month in which they were completed
     (`completed_at`). The season starts at the student's first session; there
-    is no separate season setting. `kind`, `from_month` and `to_month` narrow
-    the view, and `sessions` lists the matching individual sessions for
+    is no separate season setting. `kind`, `from_month`, `to_month`, `juz`
+    (a juz covered by the session) and `rating` (1-5 stars, or -1 for unrated)
+    narrow the view, and `sessions` lists the matching individual sessions for
     drill-down.
     """
     if user.role == "user":
@@ -145,30 +149,55 @@ def history(
         _start, end = _month_bounds(to_month)
         completed_to = end
 
-    all_q = db.query(models.Session).filter(
-        models.Session.student_id == student_id
-    )
-    if season_start is not None:
-        all_q = all_q.filter(models.Session.date >= season_start)
-    if kind is not None:
-        all_q = all_q.filter(models.Session.kind == kind)
-    if completed_from is not None:
-        all_q = all_q.filter(models.Session.date >= completed_from.date())
-    if completed_to is not None:
-        all_q = all_q.filter(models.Session.date < completed_to.date())
-    total_sessions = all_q.count()
+    def apply_common(q):
+        if season_start is not None:
+            q = q.filter(models.Session.date >= season_start)
+        if kind is not None:
+            q = q.filter(models.Session.kind == kind)
+        if completed_from is not None:
+            q = q.filter(models.Session.date >= completed_from.date())
+        if completed_to is not None:
+            q = q.filter(models.Session.date < completed_to.date())
+        if rating is not None:
+            q = q.filter(
+                models.Session.rating.is_(None)
+                if rating == -1
+                else models.Session.rating == rating
+            )
+        return q
 
-    completed_q = db.query(models.Session).filter(
-        models.Session.student_id == student_id,
-        models.Session.completed == True,  # noqa: E712
+    def apply_completed(q):
+        if kind is not None:
+            q = q.filter(models.Session.kind == kind)
+        if completed_from is not None:
+            q = q.filter(models.Session.completed_at >= completed_from)
+        if completed_to is not None:
+            q = q.filter(models.Session.completed_at < completed_to)
+        if rating is not None:
+            q = q.filter(
+                models.Session.rating.is_(None)
+                if rating == -1
+                else models.Session.rating == rating
+            )
+        return q
+
+    all_q = apply_common(
+        db.query(models.Session).filter(models.Session.student_id == student_id)
     )
-    if kind is not None:
-        completed_q = completed_q.filter(models.Session.kind == kind)
-    if completed_from is not None:
-        completed_q = completed_q.filter(models.Session.completed_at >= completed_from)
-    if completed_to is not None:
-        completed_q = completed_q.filter(models.Session.completed_at < completed_to)
-    completed = completed_q.all()
+    completed_q = apply_completed(
+        db.query(models.Session).filter(
+            models.Session.student_id == student_id,
+            models.Session.completed == True,  # noqa: E712
+        )
+    )
+
+    if juz is not None:
+        all_rows = [r for r in all_q.all() if session_covers_juz(r, juz)]
+        total_sessions = len(all_rows)
+        completed = [r for r in completed_q.all() if session_covers_juz(r, juz)]
+    else:
+        total_sessions = all_q.count()
+        completed = completed_q.all()
 
     months: dict[str, dict] = {}
     stars: dict[str, dict] = {}
@@ -231,6 +260,8 @@ def history(
         kind=kind,
         completed_from=completed_from,
         completed_to=completed_to,
+        rating=rating,
+        juz=juz,
     )
     by_juz = [
         schemas.HistoryJuzOut(

@@ -791,6 +791,81 @@ def test_history_aggregates_monthly_stars_and_juz(client):
     assert summary["juzs_completed"] == 0
 
 
+def test_history_filter_by_juz(client):
+    login_admin(client)
+    student = create_student(client, "Juz Filter").json()
+
+    def juz_session(juz, date):
+        r = client.post(
+            "/api/sessions",
+            json={
+                "student_id": student["id"],
+                "kind": "new",
+                "juz": juz,
+                "from_ayah": 1,
+                "to_ayah": 7,
+                "date": date,
+            },
+        )
+        assert r.status_code == 201
+        return r.json()
+
+    s1 = juz_session(1, "2026-02-01")
+    s2 = juz_session(1, "2026-02-05")
+    s3 = juz_session(2, "2026-02-10")
+    for s in (s1, s2, s3):
+        client.patch(f"/api/sessions/{s['id']}/complete", json={"completed": True})
+        set_completed_at(s["id"], datetime(2026, 2, 15, 12, 0))
+
+    all_body = client.get(f"/api/stats/history?student_id={student['id']}").json()
+    assert all_body["summary"]["total_sessions"] == 3
+    assert all_body["summary"]["completed_sessions"] == 3
+
+    juz1 = client.get(f"/api/stats/history?student_id={student['id']}&juz=1").json()
+    assert juz1["summary"]["total_sessions"] == 2
+    assert juz1["summary"]["completed_sessions"] == 2
+    assert all(s["juz"] == 1 for s in juz1["sessions"])
+    assert [j["juz"] for j in juz1["by_juz"]] == [1]
+    assert juz1["by_juz"][0]["sessions"] == 2
+
+    juz2 = client.get(f"/api/stats/history?student_id={student['id']}&juz=2").json()
+    assert juz2["summary"]["total_sessions"] == 1
+    assert [s["juz"] for s in juz2["sessions"]] == [2]
+
+
+def test_history_filter_by_rating(client):
+    login_admin(client)
+    student = create_student(client, "Rating Filter").json()
+    yasin = surah_id_by_number(client, 36)
+
+    s1 = create_session(client, student["id"], "new", yasin, 1, 5, date="2026-02-01").json()
+    s2 = create_session(client, student["id"], "new", yasin, 6, 8, date="2026-02-02").json()
+    s3 = create_session(client, student["id"], "new", yasin, 9, 10, date="2026-02-03").json()
+    for s in (s1, s2, s3):
+        client.patch(f"/api/sessions/{s['id']}/complete", json={"completed": True})
+        set_completed_at(s["id"], datetime(2026, 2, 15, 12, 0))
+    client.patch(f"/api/sessions/{s1['id']}/rating", json={"rating": 4})
+    client.patch(f"/api/sessions/{s2['id']}/rating", json={"rating": 5})
+
+    four = client.get(f"/api/stats/history?student_id={student['id']}&rating=4").json()
+    assert four["summary"]["completed_sessions"] == 1
+    assert len(four["sessions"]) == 1
+    assert four["sessions"][0]["rating"] == 4
+
+    unrated = client.get(f"/api/stats/history?student_id={student['id']}&rating=-1").json()
+    assert unrated["summary"]["completed_sessions"] == 1
+    assert unrated["sessions"][0]["rating"] is None
+
+
+def test_history_filter_validation(client):
+    login_admin(client)
+    student = create_student(client, "Filter Valid").json()
+    resp = client.get(f"/api/stats/history?student_id={student['id']}&juz=31")
+    assert resp.status_code == 422
+    resp = client.get(f"/api/stats/history?student_id={student['id']}&rating=6")
+    assert resp.status_code == 422
+
+
 def test_history_season_starts_at_first_session(client):
     login_admin(client)
     student = create_student(client, "Seasonal").json()
