@@ -325,7 +325,13 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  stats: () => request<Stats>("/api/stats"),
+  stats: (params: { student_id?: number; days?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.student_id != null) q.set("student_id", String(params.student_id));
+    if (params.days != null) q.set("days", String(params.days));
+    const qs = q.toString();
+    return request<Stats>(qs ? `/api/stats?${qs}` : "/api/stats");
+  },
   history: (params: {
     student_id?: number;
     kind?: "new" | "revision";

@@ -569,6 +569,37 @@ def test_student_cannot_rate(client):
     assert resp.status_code == 403
 
 
+def test_stats_recent_filter_by_student_and_days(client):
+    login_admin(client)
+    today = date.today()
+    s1 = create_student(client, "Filter A").json()
+    s2 = create_student(client, "Filter B").json()
+    yasin = surah_id_by_number(client, 36)
+
+    create_session(client, s1["id"], "new", yasin, 1, 5, date=today.isoformat())
+    create_session(client, s2["id"], "new", yasin, 6, 8, date=today.isoformat())
+    create_session(client, s1["id"], "new", yasin, 9, 12, date=(today - timedelta(days=30)).isoformat())
+
+    all_stats = client.get("/api/stats").json()
+    assert len(all_stats["recent_sessions"]) == 3
+
+    filtered = client.get(f"/api/stats?student_id={s1['id']}").json()
+    assert all(r["student_id"] == s1["id"] for r in filtered["recent_sessions"])
+    assert len(filtered["recent_sessions"]) == 2
+
+    last7 = client.get("/api/stats?days=7").json()
+    assert len(last7["recent_sessions"]) == 2
+    assert all(
+        r["date"] >= (today - timedelta(days=6)).isoformat()
+        for r in last7["recent_sessions"]
+    )
+
+    combined = client.get(f"/api/stats?student_id={s1['id']}&days=7").json()
+    assert len(combined["recent_sessions"]) == 1
+
+    assert client.get("/api/stats?days=0").status_code == 422
+
+
 def test_juz_summary_avg_rating_and_duration(client):
     login_admin(client)
     student = create_student(client, "Summary").json()
@@ -582,6 +613,7 @@ def test_juz_summary_avg_rating_and_duration(client):
     s2 = create_session(
         client, student["id"], "new", yasin, 441, 442, date=today.isoformat(),
     )
+
     client.patch(f"/api/sessions/{s1.json()['id']}/complete", json={"completed": True})
     client.patch(f"/api/sessions/{s2.json()['id']}/complete", json={"completed": True})
     client.patch(f"/api/sessions/{s1.json()['id']}/rating", json={"rating": 4})

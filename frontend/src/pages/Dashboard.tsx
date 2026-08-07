@@ -19,6 +19,7 @@ function groupSessions(sessions: SessionDetail[]) {
 }
 
 export default function Dashboard({ user }: { user: User }) {
+  const isStudent = user.role === "user";
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
   const [ticking, setTicking] = useState<number | null>(null);
@@ -27,18 +28,25 @@ export default function Dashboard({ user }: { user: User }) {
   const [partialFrom, setPartialFrom] = useState("");
   const [partialTo, setPartialTo] = useState("");
   const [partialNote, setPartialNote] = useState("");
+  const [recentStudentId, setRecentStudentId] = useState<number | null>(null);
+  const [recentDays, setRecentDays] = useState<number | null>(null);
+
+  async function loadStats() {
+    return api.stats({
+      student_id: isStudent ? undefined : recentStudentId ?? undefined,
+      days: recentDays ?? undefined,
+    });
+  }
 
   useEffect(() => {
-    api
-      .stats()
+    loadStats()
       .then(setStats)
       .catch((e) => setError((e as Error).message));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStudent, recentStudentId, recentDays]);
 
   if (error) return <div className="card error">{error}</div>;
   if (!stats) return <div className="center">Loading…</div>;
-
-  const isStudent = user.role === "user";
 
   const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
@@ -60,7 +68,7 @@ export default function Dashboard({ user }: { user: User }) {
     setTicking(s.id);
     try {
       await api.setSessionCompleted(s.id, body);
-      setStats(await api.stats());
+      setStats(await loadStats());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -103,7 +111,7 @@ export default function Dashboard({ user }: { user: User }) {
   async function saveRating(id: number, rating: number | null, feedback: string | null) {
     try {
       await api.setSessionRating(id, { rating, feedback });
-      setStats(await api.stats());
+      setStats(await loadStats());
       setRatingFor(null);
     } catch (e) {
       setError((e as Error).message);
@@ -512,6 +520,39 @@ export default function Dashboard({ user }: { user: User }) {
       )}
 
       <h2>Recent sessions</h2>
+
+      <div className="card filters">
+        {!isStudent && (
+          <label>
+            Student
+            <select
+              value={recentStudentId ?? ""}
+              onChange={(e) =>
+                setRecentStudentId(e.target.value ? Number(e.target.value) : null)
+              }
+            >
+              <option value="">All students</option>
+              {stats.students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <label>
+          Period
+          <select
+            value={recentDays ?? ""}
+            onChange={(e) => setRecentDays(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Latest</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+          </select>
+        </label>
+      </div>
+
       <table>
         <thead>
           <tr>

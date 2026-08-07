@@ -61,9 +61,18 @@ export default function Dashboard() {
   const [partialTo, setPartialTo] = useState<number | null>(null);
   const [partialNote, setPartialNote] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [recentStudentId, setRecentStudentId] = useState<number | null>(null);
+  const [recentDays, setRecentDays] = useState<number | null>(null);
+
+  async function loadStats() {
+    return api.stats({
+      student_id: isStudent ? undefined : recentStudentId ?? undefined,
+      days: recentDays ?? undefined,
+    });
+  }
 
   async function reload() {
-    setStats(await api.stats());
+    setStats(await loadStats());
   }
 
   async function handleRefresh() {
@@ -78,11 +87,11 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    api
-      .stats()
+    loadStats()
       .then(setStats)
       .catch((e) => setError((e as Error).message));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStudent, recentStudentId, recentDays]);
 
   if (!user) return null;
   if (error) return <Screen><ErrorText>{error}</ErrorText></Screen>;
@@ -274,6 +283,37 @@ export default function Dashboard() {
       )}
 
       <SectionTitle>Recent sessions</SectionTitle>
+
+      <Card>
+        <View style={styles.filterRow}>
+          {!isStudent && (
+            <PickerField
+              label="Student"
+              value={recentStudentId}
+              options={[
+                { label: "All students", value: "" },
+                ...stats.students.map((s) => ({ label: s.name, value: s.id })),
+              ]}
+              placeholder="All students"
+              style={{ flex: 1 }}
+              onChange={(v) => setRecentStudentId(v === "" ? null : Number(v))}
+            />
+          )}
+          <PickerField
+            label="Period"
+            value={recentDays}
+            options={[
+              { label: "Latest", value: "" },
+              { label: "Last 7 days", value: 7 },
+              { label: "Last 30 days", value: 30 },
+            ]}
+            placeholder="Latest"
+            style={{ flex: 1 }}
+            onChange={(v) => setRecentDays(v === "" ? null : Number(v))}
+          />
+        </View>
+      </Card>
+
       {sessionGroups.length === 0 ? (
         <EmptyState>No sessions yet.</EmptyState>
       ) : (
@@ -421,6 +461,11 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     gap: 10,
+  },
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
   },
   statCard: {
     flex: 1,

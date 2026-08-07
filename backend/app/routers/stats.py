@@ -1,4 +1,4 @@
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -20,7 +20,10 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 @router.get("", response_model=schemas.StatsOut)
 def stats(
-    db: Session = Depends(get_db), user: models.User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    student_id: int | None = Query(default=None),
+    days: int | None = Query(default=None, ge=1, le=370),
 ):
     if user.role == "user" and user.student_id is not None:
         student = db.get(models.Student, user.student_id)
@@ -38,7 +41,17 @@ def stats(
     q = db.query(models.Session)
     if user.role == "user":
         q = q.filter(models.Session.student_id == user.student_id)
-    recent = q.order_by(models.Session.date.desc(), models.Session.id.desc()).limit(15).all()
+    elif student_id is not None:
+        q = q.filter(models.Session.student_id == student_id)
+    if days is not None:
+        since = date.today() - timedelta(days=days - 1)
+        q = q.filter(models.Session.date >= since)
+    recent_q = q.order_by(models.Session.date.desc(), models.Session.id.desc())
+    recent = (
+        recent_q.all()
+        if days is not None
+        else recent_q.limit(15).all()
+    )
     enriched = _enrich(db, recent)
 
     rateable = []
