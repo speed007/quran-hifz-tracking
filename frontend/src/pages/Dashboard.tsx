@@ -30,6 +30,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [partialNote, setPartialNote] = useState("");
   const [recentStudentId, setRecentStudentId] = useState<number | null>(null);
   const [recentDays, setRecentDays] = useState<number | null>(null);
+  const [recentStatus, setRecentStatus] = useState<"" | "rated" | "unrated" | "waiting">("");
 
   async function loadStats() {
     return api.stats({
@@ -51,9 +52,17 @@ export default function Dashboard({ user }: { user: User }) {
   const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
+  const filteredSessions =
+    recentStatus === "rated"
+      ? displaySessions.filter((s) => s.rating != null)
+      : recentStatus === "unrated"
+        ? displaySessions.filter((s) => s.completed && s.rating == null)
+        : recentStatus === "waiting"
+          ? displaySessions.filter((s) => !s.completed)
+          : displaySessions;
   const sessionGroups = isStudent
-    ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: displaySessions }]
-    : groupSessions(displaySessions);
+    ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: filteredSessions }]
+    : groupSessions(filteredSessions);
 
   async function completeSession(
     s: SessionDetail,
@@ -549,6 +558,18 @@ export default function Dashboard({ user }: { user: User }) {
             <option value="">Latest</option>
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
+          </select>
+        </label>
+        <label>
+          Status
+          <select
+            value={recentStatus}
+            onChange={(e) => setRecentStatus(e.target.value as "" | "rated" | "unrated" | "waiting")}
+          >
+            <option value="">All</option>
+            <option value="rated">Rated</option>
+            <option value="unrated">Unrated</option>
+            <option value="waiting">Waiting</option>
           </select>
         </label>
       </div>
