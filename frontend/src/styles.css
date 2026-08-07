@@ -273,8 +273,9 @@ body {
 }
 
 .session-meta-label {
-  color: var(--muted);
+  color: var(--text);
   font-weight: 600;
+  font-size: 0.92rem;
   white-space: nowrap;
 }
 
