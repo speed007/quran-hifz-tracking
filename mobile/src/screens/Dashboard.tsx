@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [recentDays, setRecentDays] = useState<number | null>(null);
   const [recentStatus, setRecentStatus] = useState<"" | "rated" | "unrated" | "waiting">("");
   const [recentKind, setRecentKind] = useState<"" | "new" | "revision">("");
+  const [recentLoggedBy, setRecentLoggedBy] = useState<number | null>(null);
 
   async function loadStats() {
     return api.stats({
@@ -108,6 +109,7 @@ export default function Dashboard() {
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
   const filteredSessions = displaySessions
     .filter((s) => (recentKind ? s.kind === recentKind : true))
+    .filter((s) => (recentLoggedBy ? s.logged_by_id === recentLoggedBy : true))
     .filter((s) =>
       recentStatus === "rated"
         ? s.rating != null
@@ -117,6 +119,13 @@ export default function Dashboard() {
             ? !s.completed
             : true
     );
+
+  const loggedByOptions = Array.from(
+    displaySessions.reduce((m, s) => {
+      if (s.logged_by_id != null) m.set(s.logged_by_id, s.logged_by_name ?? "Unknown");
+      return m;
+    }, new Map<number, string>())
+  );
   const sessionGroups = isStudent
     ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: filteredSessions }]
     : groupSessions(filteredSessions);
@@ -348,6 +357,17 @@ export default function Dashboard() {
             placeholder="All"
             style={{ flex: 1 }}
             onChange={(v) => setRecentKind(v as "" | "new" | "revision")}
+          />
+          <PickerField
+            label="Logged by"
+            value={recentLoggedBy}
+            options={[
+              { label: "All", value: "" },
+              ...loggedByOptions.map(([id, name]) => ({ label: name, value: id })),
+            ]}
+            placeholder="All"
+            style={{ flex: 1 }}
+            onChange={(v) => setRecentLoggedBy(v === "" ? null : Number(v))}
           />
         </View>
       </Card>
