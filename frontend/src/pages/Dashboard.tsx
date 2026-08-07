@@ -408,7 +408,10 @@ export default function Dashboard({ user }: { user: User }) {
                 <tr className="session-meta-row">
                   <td colSpan={10}>
                     <div className="session-meta">
-                      <span className="session-meta-label">{sectionLabel(s)}</span>
+                      <span className="session-meta-label">
+                        {sectionLabel(s)}
+                        {s.surah_name_en ? ` · ${s.surah_name_en}` : ""}
+                      </span>
                       {noteText && (
                         <span className="session-meta-note" title={noteText}>
                           {noteText}
