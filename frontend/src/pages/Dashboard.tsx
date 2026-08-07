@@ -121,13 +121,18 @@ export default function Dashboard({ user }: { user: User }) {
     return "–";
   }
 
-  function partialInfo(s: SessionDetail) {
+  function partialNoteText(s: SessionDetail): string | null {
     if (s.completion !== "partial") return null;
     const range =
       s.partial_from_ayah != null && s.partial_to_ayah != null
         ? `Did ayahs ${s.partial_from_ayah}–${s.partial_to_ayah}. `
         : "Partial. ";
-    const note = `${range}${s.partial_note}`;
+    return `${range}${s.partial_note ?? ""}`;
+  }
+
+  function partialInfo(s: SessionDetail) {
+    const note = partialNoteText(s);
+    if (!note) return null;
     return (
       <p className="muted partial-info" title={note}>
         {note}
@@ -320,7 +325,6 @@ export default function Dashboard({ user }: { user: User }) {
             <th className="hide-mobile">Surah</th>
             <th>Pages</th>
             <th>Deadline</th>
-            <th>Juz</th>
             <th>Ruku</th>
             <th className="hide-mobile">Logged by</th>
             <th>Rating</th>
@@ -329,6 +333,7 @@ export default function Dashboard({ user }: { user: User }) {
         <tbody>
           {displaySessions.map((s) => {
             const overdue = !s.completed && !!s.deadline && new Date(s.deadline) < new Date();
+            const noteText = partialNoteText(s);
             return (
               <Fragment key={s.id}>
                 <tr className={`${overdue ? "overdue" : ""} ${s.completed ? "completed-row" : ""}`}>
@@ -381,7 +386,6 @@ export default function Dashboard({ user }: { user: User }) {
                       ? `${s.deadline}${overdue ? " ⚠️" : ""}`
                       : "–"}
                   </td>
-                  <td>{sectionLabel(s)}{partialInfo(s)}</td>
                   <td>
                     {s.ruku_from != null && s.ruku_to != null
                       ? s.ruku_from === s.ruku_to
@@ -401,9 +405,21 @@ export default function Dashboard({ user }: { user: User }) {
                     )}
                   </td>
                 </tr>
+                <tr className="session-meta-row">
+                  <td colSpan={10}>
+                    <div className="session-meta">
+                      <span className="session-meta-label">{sectionLabel(s)}</span>
+                      {noteText && (
+                        <span className="session-meta-note" title={noteText}>
+                          {noteText}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
                 {!isStudent && ratingFor === s.id && (
                   <tr key={`rating-${s.id}`} className="rating-editor-row">
-                    <td colSpan={11}>
+                    <td colSpan={10}>
                       <RatingEditor
                         rating={s.rating}
                         feedback={s.feedback}
@@ -415,7 +431,7 @@ export default function Dashboard({ user }: { user: User }) {
                 )}
                 {isStudent && partialFor === s.id && (
                   <tr key={`partial-${s.id}`} className="rating-editor-row">
-                    <td colSpan={11}>
+                    <td colSpan={10}>
                       <div className="rating-editor">
                         <p className="muted">
                           You were assigned Juz {s.juz} ayahs {s.from_ayah}–
@@ -475,7 +491,7 @@ export default function Dashboard({ user }: { user: User }) {
           })}
           {displaySessions.length === 0 && (
             <tr>
-              <td colSpan={11} className="muted">
+              <td colSpan={10} className="muted">
                 No sessions yet.
               </td>
             </tr>
