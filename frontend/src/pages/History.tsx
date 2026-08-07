@@ -40,6 +40,8 @@ export default function HistoryPage({ user }: { user: User }) {
   const [toMonth, setToMonth] = useState("");
   const [breakdown, setBreakdown] = useState<Breakdown>("month");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [juzFilter, setJuzFilter] = useState<number | null>(null);
+  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const [ratingFor, setRatingFor] = useState<number | null>(null);
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
@@ -64,10 +66,12 @@ export default function HistoryPage({ user }: { user: User }) {
       kind: kind || undefined,
       from_month: fromMonth || undefined,
       to_month: toMonth || undefined,
+      juz: juzFilter ?? undefined,
+      rating: ratingFilter ?? undefined,
     })
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, [isStudent, studentId, kind, fromMonth, toMonth]);
+  }, [isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
 
   if (error) return <div className="card error">{error}</div>;
 
@@ -108,6 +112,8 @@ export default function HistoryPage({ user }: { user: User }) {
         kind: kind || undefined,
         from_month: fromMonth || undefined,
         to_month: toMonth || undefined,
+        juz: juzFilter ?? undefined,
+        rating: ratingFilter ?? undefined,
       }));
       setRatingFor(null);
     } catch (e) {
@@ -157,14 +163,6 @@ export default function HistoryPage({ user }: { user: User }) {
             <option value="revision">Revision</option>
           </select>
         </label>
-        <label>
-          From month
-          <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
-        </label>
-        <label>
-          To month
-          <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
-        </label>
       </div>
 
       <div className="segmented" role="tablist" aria-label="Break down by">
@@ -178,10 +176,72 @@ export default function HistoryPage({ user }: { user: User }) {
               setSelectedGroup(null);
             }}
           >
-            {b === "month" ? "By month" : b === "juz" ? "By juz" : "By stars"}
+            {b === "month" ? "Month" : b === "juz" ? "Juz" : "Stars"}
           </button>
         ))}
       </div>
+
+      {breakdown !== "month" && (
+        <div className="card filters">
+          <label>
+            From month
+            <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} />
+          </label>
+          <label>
+            To month
+            <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} />
+          </label>
+        </div>
+      )}
+
+      {breakdown !== "juz" && (
+        <div className="card filters">
+          <label>
+            Juz
+            <select value={juzFilter ?? ""} onChange={(e) => setJuzFilter(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Any</option>
+              {Array.from({ length: 30 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  Juz {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {breakdown !== "stars" && (
+        <div className="card filters">
+          <label>
+            Stars
+            <select value={ratingFilter ?? ""} onChange={(e) => setRatingFilter(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Any</option>
+              <option value="-1">Not rated</option>
+              <option value="1">1★</option>
+              <option value="2">2★</option>
+              <option value="3">3★</option>
+              <option value="4">4★</option>
+              <option value="5">5★</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      {(kind !== "" || juzFilter != null || ratingFilter != null || fromMonth || toMonth) && (
+        <button
+          type="button"
+          className="link-button"
+          onClick={() => {
+            setKind("");
+            setJuzFilter(null);
+            setRatingFilter(null);
+            setFromMonth("");
+            setToMonth("");
+          }}
+        >
+          Clear filters
+        </button>
+      )}
 
       {!data && !error && <div className="center">Loading…</div>}
 
@@ -224,7 +284,7 @@ export default function HistoryPage({ user }: { user: User }) {
           </div>
 
           {breakdown === "month" && data.by_month.length > 0 && (
-            <h2>By month — click a row to drill down</h2>
+            <h2>Months — click a row to drill down</h2>
           )}
           {breakdown === "month" && data.by_month.length > 0 && (
             <table>
@@ -268,7 +328,7 @@ export default function HistoryPage({ user }: { user: User }) {
           )}
 
           {breakdown === "juz" && data.by_juz.length > 0 && (
-            <h2>By juz — click a row to drill down</h2>
+            <h2>Juzs — click a row to drill down</h2>
           )}
           {breakdown === "juz" && data.by_juz.length > 0 && (
             <table>
@@ -329,7 +389,7 @@ export default function HistoryPage({ user }: { user: User }) {
           )}
 
           {breakdown === "stars" && data.by_stars.length > 0 && (
-            <h2>By stars — click a row to drill down</h2>
+            <h2>Stars — click a row to drill down</h2>
           )}
           {breakdown === "stars" && data.by_stars.length > 0 && (
             <table>

@@ -322,12 +322,16 @@ export const api = {
     kind?: "new" | "revision";
     from_month?: string;
     to_month?: string;
+    juz?: number;
+    rating?: number;
   } = {}) => {
     const q = new URLSearchParams();
     if (params.student_id != null) q.set("student_id", String(params.student_id));
     if (params.kind) q.set("kind", params.kind);
     if (params.from_month) q.set("from_month", params.from_month);
     if (params.to_month) q.set("to_month", params.to_month);
+    if (params.juz != null) q.set("juz", String(params.juz));
+    if (params.rating != null) q.set("rating", String(params.rating));
     const qs = q.toString();
     return request<History>(qs ? `/api/stats/history?${qs}` : "/api/stats/history");
   },

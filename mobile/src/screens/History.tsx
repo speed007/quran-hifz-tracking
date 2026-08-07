@@ -57,6 +57,8 @@ export default function HistoryPage() {
   const [toMonth, setToMonth] = useState("");
   const [breakdown, setBreakdown] = useState<Breakdown>("month");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [juzFilter, setJuzFilter] = useState<number | null>(null);
+  const [ratingFilter, setRatingFilter] = useState<number | null>(null);
   const [ratingFor, setRatingFor] = useState<number | null>(null);
   const [data, setData] = useState<History | null>(null);
   const [error, setError] = useState("");
@@ -85,10 +87,12 @@ export default function HistoryPage() {
         kind: kind || undefined,
         from_month: fromMonth || undefined,
         to_month: toMonth || undefined,
+        juz: juzFilter ?? undefined,
+        rating: ratingFilter ?? undefined,
       })
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, [isStudent, studentId, kind, fromMonth, toMonth]);
+  }, [isStudent, studentId, kind, fromMonth, toMonth, juzFilter, ratingFilter]);
 
   if (error) return <Screen><ErrorText>{error}</ErrorText></Screen>;
 
@@ -130,6 +134,8 @@ export default function HistoryPage() {
           kind: kind || undefined,
           from_month: fromMonth || undefined,
           to_month: toMonth || undefined,
+          juz: juzFilter ?? undefined,
+          rating: ratingFilter ?? undefined,
         })
       );
       setRatingFor(null);
@@ -165,25 +171,13 @@ export default function HistoryPage() {
           ]}
           onChange={(v) => setKind(v as "" | "new" | "revision")}
         />
-        <PickerField
-          label="From month"
-          value={fromMonth || "any"}
-          options={[{ label: "Any", value: "any" }, ...monthOptions()]}
-          onChange={(v) => setFromMonth(v === "any" ? "" : String(v))}
-        />
-        <PickerField
-          label="To month"
-          value={toMonth || "any"}
-          options={[{ label: "Any", value: "any" }, ...monthOptions()]}
-          onChange={(v) => setToMonth(v === "any" ? "" : String(v))}
-        />
       </Card>
 
       <Segmented
         options={[
-          { label: "By month", value: "month" },
-          { label: "By juz", value: "juz" },
-          { label: "By stars", value: "stars" },
+          { label: "Month", value: "month" },
+          { label: "Juz", value: "juz" },
+          { label: "Stars", value: "stars" },
         ]}
         value={breakdown}
         onChange={(b) => {
@@ -191,6 +185,77 @@ export default function HistoryPage() {
           setSelectedGroup(null);
         }}
       />
+
+      {breakdown !== "month" && (
+        <Card>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>Month</Text>
+          <PickerField
+            label="From month"
+            value={fromMonth || "any"}
+            options={[{ label: "Any", value: "any" }, ...monthOptions()]}
+            onChange={(v) => setFromMonth(v === "any" ? "" : String(v))}
+          />
+          <PickerField
+            label="To month"
+            value={toMonth || "any"}
+            options={[{ label: "Any", value: "any" }, ...monthOptions()]}
+            onChange={(v) => setToMonth(v === "any" ? "" : String(v))}
+          />
+        </Card>
+      )}
+
+      {breakdown !== "juz" && (
+        <Card>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>Juz</Text>
+          <PickerField
+            label="Juz"
+            value={juzFilter}
+            options={[
+              { label: "Any", value: "" },
+              ...Array.from({ length: 30 }, (_, i) => i + 1).map((n) => ({
+                label: `Juz ${n}`,
+                value: n,
+              })),
+            ]}
+            placeholder="Any"
+            onChange={(v) => setJuzFilter(v === "" ? null : Number(v))}
+          />
+        </Card>
+      )}
+
+      {breakdown !== "stars" && (
+        <Card>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>Stars</Text>
+          <PickerField
+            label="Stars"
+            value={ratingFilter}
+            options={[
+              { label: "Any", value: "" },
+              { label: "Not rated", value: -1 },
+              { label: "1★", value: 1 },
+              { label: "2★", value: 2 },
+              { label: "3★", value: 3 },
+              { label: "4★", value: 4 },
+              { label: "5★", value: 5 },
+            ]}
+            placeholder="Any"
+            onChange={(v) => setRatingFilter(v === "" ? null : Number(v))}
+          />
+        </Card>
+      )}
+
+      {(kind !== "" || juzFilter != null || ratingFilter != null || fromMonth || toMonth) && (
+        <LinkButton
+          title="Clear filters"
+          onPress={() => {
+            setKind("");
+            setJuzFilter(null);
+            setRatingFilter(null);
+            setFromMonth("");
+            setToMonth("");
+          }}
+        />
+      )}
 
       {!data && !error && <Loading />}
 
@@ -216,7 +281,7 @@ export default function HistoryPage() {
               <EmptyState>No sessions match these filters.</EmptyState>
             ) : (
               <>
-                <SectionTitle>By month — tap a row to drill down</SectionTitle>
+                <SectionTitle>Months — tap a row to drill down</SectionTitle>
                 {data.by_month.map((m) => {
                   const key = `m:${m.month}`;
                   const active = selectedGroup === key;
@@ -242,7 +307,7 @@ export default function HistoryPage() {
               <EmptyState>No sessions match these filters.</EmptyState>
             ) : (
               <>
-                <SectionTitle>By juz — tap a row to drill down</SectionTitle>
+                <SectionTitle>Juzs — tap a row to drill down</SectionTitle>
                 {data.by_juz.map((j) => {
                   const key = `j:${j.juz}`;
                   const active = selectedGroup === key;
@@ -270,7 +335,7 @@ export default function HistoryPage() {
               <EmptyState>No sessions match these filters.</EmptyState>
             ) : (
               <>
-                <SectionTitle>By stars — tap a row to drill down</SectionTitle>
+                <SectionTitle>Stars — tap a row to drill down</SectionTitle>
                 {data.by_stars.map((b) => {
                   const key = b.rating != null ? `s:${b.rating}` : "s:unrated";
                   const active = selectedGroup === key;
