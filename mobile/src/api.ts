@@ -38,6 +38,14 @@ export interface Progress {
   current_page: number | null;
 }
 
+export interface SurahSegment {
+  surah_number: number;
+  name_en: string;
+  name_ar: string;
+  from_ayah: number;
+  to_ayah: number;
+}
+
 export interface SessionDetail {
   id: number;
   student_id: number;
@@ -71,6 +79,7 @@ export interface SessionDetail {
   rating: number | null;
   feedback: string | null;
   rated_by_name: string | null;
+  surah_segments: SurahSegment[] | null;
 }
 
 export interface JuzSummary {

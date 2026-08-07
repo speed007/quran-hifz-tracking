@@ -19,7 +19,7 @@ import {
   useTheme,
 } from "../ui";
 import { PickerField } from "../pickers";
-import { monthLabel, partialText, rukuLabel, sectionLabel } from "../format";
+import { monthLabel, partialText, rukuLabel, sectionLabel, sectionReference } from "../format";
 import RatingEditor from "../components/RatingEditor";
 
 type Breakdown = "month" | "juz" | "stars";
@@ -419,7 +419,7 @@ export default function HistoryPage() {
                   {!isStudent && s.student_name ? ` · ${s.student_name}` : ""}
                 </Text>
                 <Text style={{ color: theme.text }}>
-                  {s.kind === "new" ? "Memorised" : "Revision"} · {sectionLabel(s)} · {rukuLabel(s)}
+                  {s.kind === "new" ? "Memorised" : "Revision"} · {sectionReference(s)} · {rukuLabel(s)}
                 </Text>
                 <View style={styles.rowSpace}>
                   {s.rating ? (

@@ -36,6 +36,24 @@ export function sectionLabel(s: SessionDetail): string {
   return "–";
 }
 
+export function sectionReference(s: SessionDetail): string {
+  if (s.juz != null && s.from_ayah != null) {
+    const total = (s.to_ayah ?? s.from_ayah) - s.from_ayah + 1;
+    const segments = (s.surah_segments ?? []).map(
+      (seg) => `ayah ${seg.from_ayah}–${seg.to_ayah} ${seg.name_en}`
+    );
+    if (segments.length > 0) {
+      return `Juz ${s.juz} · ${segments.join(" · ")} · ${total} ayahs total`;
+    }
+    return sectionLabel(s);
+  }
+  if (s.juz_from != null && s.juz_to != null) {
+    const base = s.juz_from === s.juz_to ? `Juz ${s.juz_from}` : `Juz ${s.juz_from}–${s.juz_to}`;
+    return s.surah_name_en ? `${base} · ${s.surah_name_en}` : base;
+  }
+  return "–";
+}
+
 export function rukuLabel(s: SessionDetail): string {
   if (s.ruku_from == null || s.ruku_to == null) return "–";
   return s.ruku_from === s.ruku_to ? `Ruku ${s.ruku_from}` : `Ruku ${s.ruku_from}–${s.ruku_to}`;

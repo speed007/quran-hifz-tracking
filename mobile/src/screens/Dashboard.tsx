@@ -19,7 +19,7 @@ import {
   useTheme,
 } from "../ui";
 import { PickerField } from "../pickers";
-import { partialText, rukuLabel, sectionLabel } from "../format";
+import { partialText, rukuLabel, sectionLabel, sectionReference } from "../format";
 import RatingEditor from "../components/RatingEditor";
 
 function StatCard({ value, label }: { value: number | string; label: string }) {
@@ -279,8 +279,8 @@ export default function Dashboard() {
                 </View>
               </View>
               <Text style={{ color: theme.text }}>
-                {s.kind === "new" ? "Memorised" : "Revision"} · {s.surah_name_en} · pages {s.from_page}–
-                {s.to_page} · {sectionLabel(s)} · {rukuLabel(s)}
+                {s.kind === "new" ? "Memorised" : "Revision"} · pages {s.from_page}–
+                {s.to_page} · {sectionReference(s)} · {rukuLabel(s)}
               </Text>
               {s.note ? <Text style={{ color: theme.muted }}>Note: {s.note}</Text> : null}
 

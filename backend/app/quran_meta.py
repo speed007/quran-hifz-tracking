@@ -195,6 +195,25 @@ def surahs_in_range(first_ayah: int, last_ayah: int) -> list[int]:
     return numbers
 
 
+def surah_ayah_segments(juz: int, from_ayah: int, to_ayah: int) -> list[tuple[int, int, int]]:
+    """Split a 1-based (within-juz) ayah range into per-surah segments.
+
+    Returns a list of (surah_number, from_ayah, to_ayah) where the ayah
+    numbers are 1-based within that surah. E.g. Juz 1, ayahs 1..10 maps to
+    [(1, 1, 7), (2, 1, 3)] because Juz 1 runs from Al-Fatiha:1 through
+    Al-Baqarah:141.
+    """
+    first_global = JUZ[juz] + from_ayah - 1
+    last_global = JUZ[juz] + to_ayah - 1
+    segments: list[tuple[int, int, int]] = []
+    for n in surahs_in_range(first_global, last_global):
+        s_start, s_end = surah_global_range(n)
+        overlap_from = max(first_global, s_start)
+        overlap_to = min(last_global, s_end)
+        segments.append((n, overlap_from - s_start + 1, overlap_to - s_start + 1))
+    return segments
+
+
 def juz_ayah_range(juz_num: int) -> tuple[int, int]:
     """Return (first_global_ayah, last_global_ayah) of a juz (1..30)."""
     first = JUZ[juz_num]

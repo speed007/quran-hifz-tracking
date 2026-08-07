@@ -227,6 +227,46 @@ def test_ayah_meta_resolves_range_to_pages_and_reference(client):
     assert client.get("/api/sessions/ayah-meta?juz=1&from_ayah=8&to_ayah=7").status_code == 400
 
 
+def test_session_surah_segments_split_across_surahs(client):
+    login_admin(client)
+    student = create_student(client, "Segment Checker").json()
+
+    # Juz 1, ayahs 1..10 spans Al-Fatiha (1..7) and Al-Baqarah (1..3).
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 1,
+            "from_ayah": 1,
+            "to_ayah": 10,
+            "date": "2026-01-05",
+        },
+    )
+    assert resp.status_code == 201
+    segs = resp.json()["surah_segments"]
+    assert segs == [
+        {"surah_number": 1, "name_en": "Al-Fatiha", "name_ar": "الفاتحة", "from_ayah": 1, "to_ayah": 7},
+        {"surah_number": 2, "name_en": "Al-Baqara", "name_ar": "البقرة", "from_ayah": 1, "to_ayah": 3},
+    ]
+
+    # A single-surah range yields one segment.
+    resp2 = client.post(
+        "/api/sessions",
+        json={
+            "student_id": student["id"],
+            "kind": "new",
+            "juz": 1,
+            "from_ayah": 1,
+            "to_ayah": 7,
+            "date": "2026-01-06",
+        },
+    )
+    assert resp2.status_code == 201
+    segs2 = resp2.json()["surah_segments"]
+    assert [(s["surah_number"], s["from_ayah"], s["to_ayah"]) for s in segs2] == [(1, 1, 7)]
+
+
 def test_create_session_from_ayah_range(client):
     login_admin(client)
     student = create_student(client, "Ayah Logger").json()

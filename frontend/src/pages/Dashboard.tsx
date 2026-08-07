@@ -121,6 +121,25 @@ export default function Dashboard({ user }: { user: User }) {
     return "–";
   }
 
+  function sectionReference(s: SessionDetail): string {
+    if (s.juz != null && s.from_ayah != null) {
+      const total = (s.to_ayah ?? s.from_ayah) - s.from_ayah + 1;
+      const segments = (s.surah_segments ?? []).map(
+        (seg) => `ayah ${seg.from_ayah}–${seg.to_ayah} ${seg.name_en}`
+      );
+      if (segments.length > 0) {
+        return `Juz ${s.juz} · ${segments.join(" · ")} · ${total} ayahs total`;
+      }
+      const to = s.to_ayah != null && s.to_ayah !== s.from_ayah ? `–${s.to_ayah}` : "";
+      return `Juz ${s.juz} · ayah ${s.from_ayah}${to}`;
+    }
+    if (s.juz_from != null && s.juz_to != null) {
+      const base = s.juz_from === s.juz_to ? `Juz ${s.juz_from}` : `Juz ${s.juz_from}–${s.juz_to}`;
+      return s.surah_name_en ? `${base} · ${s.surah_name_en}` : base;
+    }
+    return "–";
+  }
+
   function partialNoteText(s: SessionDetail): string | null {
     if (s.completion !== "partial") return null;
     const range =
@@ -408,10 +427,7 @@ export default function Dashboard({ user }: { user: User }) {
                 <tr className="session-meta-row">
                   <td colSpan={10}>
                     <div className="session-meta">
-                      <span className="session-meta-label">
-                        {sectionLabel(s)}
-                        {s.surah_name_en ? ` · ${s.surah_name_en}` : ""}
-                      </span>
+                      <span className="session-meta-label">{sectionReference(s)}</span>
                       {noteText && (
                         <span className="session-meta-note" title={noteText}>
                           {noteText}

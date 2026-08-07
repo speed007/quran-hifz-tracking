@@ -49,6 +49,24 @@ function sectionLabel(s: SessionDetail): string {
   return "–";
 }
 
+function sectionReference(s: SessionDetail): string {
+  if (s.juz != null && s.from_ayah != null) {
+    const total = (s.to_ayah ?? s.from_ayah) - s.from_ayah + 1;
+    const segments = (s.surah_segments ?? []).map(
+      (seg) => `ayah ${seg.from_ayah}–${seg.to_ayah} ${seg.name_en}`
+    );
+    if (segments.length > 0) {
+      return `Juz ${s.juz} · ${segments.join(" · ")} · ${total} ayahs total`;
+    }
+    return sectionLabel(s);
+  }
+  if (s.juz_from != null && s.juz_to != null) {
+    const base = s.juz_from === s.juz_to ? `Juz ${s.juz_from}` : `Juz ${s.juz_from}–${s.juz_to}`;
+    return s.surah_name_en ? `${base} · ${s.surah_name_en}` : base;
+  }
+  return "–";
+}
+
 export default function HistoryPage({ user }: { user: User }) {
   const isStudent = user.role === "user";
   const [students, setStudents] = useState<Student[]>([]);
@@ -521,7 +539,7 @@ export default function HistoryPage({ user }: { user: User }) {
                       <td>{s.completed_at ? s.completed_at.slice(0, 10) : s.date}</td>
                       {!isStudent && <td>{s.student_name}</td>}
                       <td>{s.kind === "new" ? "Memorised" : "Revision"}</td>
-                      <td>{sectionLabel(s)}</td>
+                      <td>{sectionReference(s)}</td>
                       <td>
                         {s.ruku_from != null && s.ruku_to != null
                           ? s.ruku_from === s.ruku_to

@@ -15,12 +15,16 @@ from ..quran_meta import (
     ruku_range,
     rukus_in_juz,
     ruku_page_range,
+    surah_ayah_segments,
     surah_of_ayah,
     surahs_in_range,
 )
 from ..security import utcnow
+from ..surahs_data import SURAHS
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+_SURAH_NAMES = {number: (name_ar, name_en) for number, name_ar, name_en, _ in SURAHS}
 
 
 def validate_session_pages(from_page: int, to_page: int) -> None:
@@ -202,6 +206,17 @@ def _enrich(db: Session, rows: list[models.Session]) -> list[schemas.SessionDeta
             item.ruku_from, item.ruku_to = ruku_range(
                 first + row.from_ayah - 1, first + row.to_ayah - 1
             )
+            segs = surah_ayah_segments(row.juz, row.from_ayah, row.to_ayah)
+            item.surah_segments = [
+                schemas.SurahSegmentOut(
+                    surah_number=n,
+                    name_en=_SURAH_NAMES.get(n, ("", f"Surah {n}"))[1],
+                    name_ar=_SURAH_NAMES.get(n, ("", f"Surah {n}"))[0],
+                    from_ayah=fa,
+                    to_ayah=ta,
+                )
+                for n, fa, ta in segs
+            ]
         elif surah is not None:
             jz_from, jz_to, rk_from, rk_to = page_range_meta(
                 row.from_page, row.to_page

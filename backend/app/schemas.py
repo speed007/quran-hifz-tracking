@@ -128,6 +128,14 @@ class SessionRatingIn(BaseModel):
     feedback: str | None = Field(default=None, max_length=1000)
 
 
+class SurahSegmentOut(BaseModel):
+    surah_number: int
+    name_en: str
+    name_ar: str
+    from_ayah: int
+    to_ayah: int
+
+
 class SessionDetail(SessionOut):
     student_name: str | None = None
     surah_name_ar: str | None = None
@@ -140,6 +148,7 @@ class SessionDetail(SessionOut):
     assigned_by_name: str | None = None
     deadline: date_type | None = None
     rated_by_name: str | None = None
+    surah_segments: list[SurahSegmentOut] | None = None
 
 
 class SurahRefOut(BaseModel):
