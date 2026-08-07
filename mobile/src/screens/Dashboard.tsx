@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [recentStudentId, setRecentStudentId] = useState<number | null>(null);
   const [recentDays, setRecentDays] = useState<number | null>(null);
   const [recentStatus, setRecentStatus] = useState<"" | "rated" | "unrated" | "waiting">("");
+  const [recentKind, setRecentKind] = useState<"" | "new" | "revision">("");
 
   async function loadStats() {
     return api.stats({
@@ -105,14 +106,17 @@ export default function Dashboard() {
     ? stats.recent_sessions.filter((s) => s.student_id === user.student_id)
     : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
-  const filteredSessions =
-    recentStatus === "rated"
-      ? displaySessions.filter((s) => s.rating != null)
-      : recentStatus === "unrated"
-        ? displaySessions.filter((s) => s.completed && s.rating == null)
-        : recentStatus === "waiting"
-          ? displaySessions.filter((s) => !s.completed)
-          : displaySessions;
+  const filteredSessions = displaySessions
+    .filter((s) => (recentKind ? s.kind === recentKind : true))
+    .filter((s) =>
+      recentStatus === "rated"
+        ? s.rating != null
+        : recentStatus === "unrated"
+          ? s.completed && s.rating == null
+          : recentStatus === "waiting"
+            ? !s.completed
+            : true
+    );
   const sessionGroups = isStudent
     ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: filteredSessions }]
     : groupSessions(filteredSessions);
@@ -332,6 +336,18 @@ export default function Dashboard() {
             placeholder="All"
             style={{ flex: 1 }}
             onChange={(v) => setRecentStatus(v as "" | "rated" | "unrated" | "waiting")}
+          />
+          <PickerField
+            label="Type"
+            value={recentKind}
+            options={[
+              { label: "All", value: "" },
+              { label: "Memorised", value: "new" },
+              { label: "Revision", value: "revision" },
+            ]}
+            placeholder="All"
+            style={{ flex: 1 }}
+            onChange={(v) => setRecentKind(v as "" | "new" | "revision")}
           />
         </View>
       </Card>

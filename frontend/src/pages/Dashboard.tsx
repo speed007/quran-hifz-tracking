@@ -31,6 +31,7 @@ export default function Dashboard({ user }: { user: User }) {
   const [recentStudentId, setRecentStudentId] = useState<number | null>(null);
   const [recentDays, setRecentDays] = useState<number | null>(null);
   const [recentStatus, setRecentStatus] = useState<"" | "rated" | "unrated" | "waiting">("");
+  const [recentKind, setRecentKind] = useState<"" | "new" | "revision">("");
 
   async function loadStats() {
     return api.stats({
@@ -52,14 +53,17 @@ export default function Dashboard({ user }: { user: User }) {
   const displayStudents = isStudent ? stats.students.filter((s) => s.id === user.student_id) : stats.students;
   const displaySessions = isStudent ? stats.recent_sessions.filter((s) => s.student_id === user.student_id) : stats.recent_sessions;
   const juzs = isStudent ? stats.juz_summary?.[user.student_id ?? -1] ?? [] : [];
-  const filteredSessions =
-    recentStatus === "rated"
-      ? displaySessions.filter((s) => s.rating != null)
-      : recentStatus === "unrated"
-        ? displaySessions.filter((s) => s.completed && s.rating == null)
-        : recentStatus === "waiting"
-          ? displaySessions.filter((s) => !s.completed)
-          : displaySessions;
+  const filteredSessions = displaySessions
+    .filter((s) => (recentKind ? s.kind === recentKind : true))
+    .filter((s) =>
+      recentStatus === "rated"
+        ? s.rating != null
+        : recentStatus === "unrated"
+          ? s.completed && s.rating == null
+          : recentStatus === "waiting"
+            ? !s.completed
+            : true
+    );
   const sessionGroups = isStudent
     ? [{ student_id: user.student_id ?? -1, name: user.name, sessions: filteredSessions }]
     : groupSessions(filteredSessions);
@@ -570,6 +574,17 @@ export default function Dashboard({ user }: { user: User }) {
             <option value="rated">Rated</option>
             <option value="unrated">Unrated</option>
             <option value="waiting">Waiting</option>
+          </select>
+        </label>
+        <label>
+          Type
+          <select
+            value={recentKind}
+            onChange={(e) => setRecentKind(e.target.value as "" | "new" | "revision")}
+          >
+            <option value="">All</option>
+            <option value="new">Memorised</option>
+            <option value="revision">Revision</option>
           </select>
         </label>
       </div>
